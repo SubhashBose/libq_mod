@@ -26,6 +26,9 @@ jobs:
           ./autogen.sh  --disable-shared --enable-static  --enable-compiled-definitions
           make
           
+      - name: Test
+        run: ./src/qalc '5.6h to h'
+      
       - name: Create tag
         id: create_tag
         run: |
