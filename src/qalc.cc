@@ -4278,12 +4278,13 @@ int main(int argc, char *argv[]) {
 									dp = ds->getNextProperty(&it);
 								}
 							}
+							/*
 							if(f->subtype() == SUBTYPE_USER_FUNCTION) {
 								CHECK_IF_SCREEN_FILLED_PUTS("");
 								ParseOptions pa = evalops.parse_options; pa.base = 10;
 								str = _("Expression:"); str += " "; str += CALCULATOR->unlocalizeExpression(((UserFunction*) f)->formula(), pa);
 								CHECK_IF_SCREEN_FILLED_PUTS(str.c_str());
-							}
+							}*/
 							CHECK_IF_SCREEN_FILLED_PUTS("");
 							break;
 						}
