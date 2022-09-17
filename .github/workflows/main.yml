@@ -21,6 +21,7 @@ jobs:
       # Runs a single command using the runners shell
       - name: compile
         run: |
+          sudo apt-get update
           sudo apt-get install -y intltool libmpfr* libcurl4-openssl-dev doxygen
           ./autogen.sh  --disable-shared --enable-static  --enable-compiled-definitions
           make
