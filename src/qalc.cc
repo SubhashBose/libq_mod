@@ -4313,6 +4313,7 @@ int main(int argc, char *argv[]) {
 									break;
 								}
 								case SUBTYPE_ALIAS_UNIT: {
+									break; // SB mod
 									AliasUnit *au = (AliasUnit*) item;
 									PRINT_AND_COLON_TABS_INFO(_("Base Unit"));
 									string base_unit = au->firstBaseUnit()->print(false, printops.abbreviate_names, printops.use_unicode_signs);
