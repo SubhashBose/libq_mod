@@ -21,6 +21,7 @@
 
 #include <sstream>
 #include <time.h>
+#include <limits.h>
 #include <limits>
 #include <math.h>
 #include <algorithm>
@@ -1016,7 +1017,7 @@ int RemFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			FR_FUNCTION_2c1
 		}
 	} else if(!vargs[0].isNumber()) {
-		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger()) {
+		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && !vargs[0][0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, vargs[0][0].number(), vargs[0][1].number(), vargs[1].number(), true)) {mstruct = nr; return 1;}
 		}
@@ -1029,7 +1030,7 @@ int RemFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 		} else {
 			mstruct.eval(eo);
 		}
-		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger()) {
+		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && !mstruct[0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, mstruct[0].number(), mstruct[1].number(), vargs[1].number(), true)) {
 				remove_overflow_message();
@@ -1042,7 +1043,7 @@ int RemFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			bool b = true;
 			MathStructure mbak(mstruct);
 			for(size_t i = 0; i < mstruct.size(); i++) {
-				if(!mstruct[i].isInteger() && (!mstruct[i].isPower() || !mstruct[i][0].isInteger() || !mstruct[i][1].isInteger())) {b = false; break;}
+				if(!mstruct[i].isInteger() && (!mstruct[i].isPower() || !mstruct[i][0].isInteger() || !mstruct[i][1].isInteger() || mstruct[i][0].number().isZero())) {b = false; break;}
 			}
 			if(b) {
 				remove_overflow_message();
@@ -1085,7 +1086,7 @@ int ModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			FR_FUNCTION_2c1
 		}
 	} else if(!vargs[0].isNumber()) {
-		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger()) {
+		if(vargs[0].isPower() && vargs[0][0].isInteger() && vargs[0][1].isInteger() && !vargs[0][0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, vargs[0][0].number(), vargs[0][1].number(), vargs[1].number(), false)) {mstruct = nr; return 1;}
 		}
@@ -1098,7 +1099,7 @@ int ModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 		} else {
 			mstruct.eval(eo);
 		}
-		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger()) {
+		if(mstruct.isPower() && mstruct[0].isInteger() && mstruct[1].isInteger() && !mstruct[0].number().isZero()) {
 			Number nr;
 			if(powmod(nr, mstruct[0].number(), mstruct[1].number(), vargs[1].number(), false)) {
 				remove_overflow_message();
@@ -1111,7 +1112,7 @@ int ModFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, c
 			bool b = true;
 			MathStructure mbak(mstruct);
 			for(size_t i = 0; i < mstruct.size(); i++) {
-				if(!mstruct[i].isInteger() && (!mstruct[i].isPower() || !mstruct[i][0].isInteger() || !mstruct[i][1].isInteger())) {b = false; break;}
+				if(!mstruct[i].isInteger() && (!mstruct[i].isPower() || !mstruct[i][0].isInteger() || !mstruct[i][1].isInteger() || mstruct[i][0].number().isZero())) {b = false; break;}
 			}
 			if(b) {
 				remove_overflow_message();
@@ -1874,8 +1875,7 @@ int ReFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, co
 		return 1;
 	} else if(mstruct.isPower() && mstruct[1].isNumber() && mstruct[1].number().denominatorIsTwo() && mstruct[0].isNumber() && !mstruct[0].number().hasRealPart() && mstruct[0].number().imaginaryPartIsNonZero()) {
 		Number nbase(mstruct[0].number().imaginaryPart());
-		bool b_neg = nbase.isNegative();
-		if(b_neg) nbase.negate();
+		if(nbase.isNegative()) nbase.negate();
 		mstruct[0].set(nbase, true);
 		mstruct[0].divide(nr_two);
 		if(!mstruct[1].number().numeratorIsOne()) {
@@ -1883,17 +1883,16 @@ int ReFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, co
 			mstruct[1].number() /= nexp.numerator();
 			if(nexp.isNegative()) {
 				mstruct.inverse();
-				b_neg = !b_neg;
 				mstruct *= nr_half;
 			}
+			Number nexp2(nexp);
 			nexp.trunc();
 			mstruct *= nbase;
 			mstruct.last().raise(nexp);
-			nexp /= 2;
-			nexp.trunc();
-			if(nexp.isOdd()) b_neg = !b_neg;
+			nexp2 /= 2;
+			nexp2.round();
+			if(nexp2.isOdd()) mstruct.negate();
 		}
-		if(b_neg) mstruct.negate();
 		return 1;
 	} else if(mstruct.isMultiplication() && mstruct.size() > 0) {
 		if(mstruct[0].isNumber()) {

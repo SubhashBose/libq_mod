@@ -6,7 +6,7 @@ dnl  ----------------------
 dnl | initialize autotools |---------------------------------------------------
 dnl  ----------------------
 
-AC_INIT([libqalculate],[4.3.0])
+AC_INIT([libqalculate],[4.4.0])
 AC_CONFIG_SRCDIR(libqalculate/Calculator.cc)
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
@@ -73,7 +73,7 @@ QALCULATE_CURRENT=39
 
 dnl increment any time the source changes; set to 
 dnl  0 if you increment CURRENT
-QALCULATE_REVISION=1
+QALCULATE_REVISION=2
 
 dnl increment if any interfaces have been added; set to 0
 dnl  if any interfaces have been removed. removal has 
@@ -124,7 +124,7 @@ AS_IF([test "x$with_icu" = "xyes"], [
 	AC_SUBST(ICU_LIBS)
 ])
 
-AC_ARG_WITH([gnuplot-call], AS_HELP_STRING([--without-gnuplot-call], [disable support for invocation of external gnuplot binary (using popen)]), [], [with_gnuplot_call=yes])
+AC_ARG_WITH([gnuplot-call], AS_HELP_STRING([--without-gnuplot-call], [disable support for invocation of external commands, including gnuplot, using popen]), [], [with_gnuplot_call=yes])
 AS_IF([test "x$with_gnuplot_call" = "xyes"], [
 	AC_DEFINE([HAVE_GNUPLOT_CALL], [1], [Call to external gnuplot])
 ])

@@ -906,6 +906,26 @@ int idm3_test(bool &b_fail, const MathStructure &mnum, const Number &nr, bool ex
 	return 0;
 }
 
+bool is_unit_exp_strict(const MathStructure &m, bool in_div = false, bool in_mul = false) {
+	return m.isUnit() || (m.isPower() && m[0].isUnit() && ((m[1].isInteger() && !m[1].number().isZero()) || (m[1].isNegate() && m[1][0].isInteger() && m[1][0].number().isPositive())));
+}
+bool is_unit_multiexp_strict(const MathStructure &m, bool in_div = false, bool in_mul = false) {
+	if(is_unit_exp_strict(m)) return true;
+	if(m.isMultiplication() && !in_mul) {
+		for(size_t i = 0; i < m.size(); i++) {
+			if(!is_unit_multiexp_strict(m[i], in_div, true)) return false;
+		}
+		return true;
+	}
+	if(m.isInverse() && !in_div) {
+		return is_unit_multiexp_strict(m[0], true, false);
+	}
+	if(m.isDivision() && !in_div) {
+		return is_unit_multiexp_strict(m[0], true, in_mul) && is_unit_multiexp_strict(m[1], true, false);
+	}
+	return false;
+}
+
 bool is_unit_multiexp(const MathStructure &mstruct) {
 	if(mstruct.isUnit_exp()) return true;
 	if(mstruct.isMultiplication()) {
@@ -1135,6 +1155,7 @@ bool has_prefix(const MathStructure &mstruct) {
 }
 
 void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, size_t pindex) {
+	bool do_child_prefix = true;
 	switch(m_type) {
 		case STRUCT_MULTIPLICATION: {
 			bool b = false;
@@ -1144,7 +1165,8 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 				if(CHILD(i2).isUnit_exp()) {
 					if(CHILD(i2).unit_exp_prefix()) {
 						b = false;
-						return;
+						do_child_prefix = false;
+						break;
 					}
 					if(!b) {
 						if(use_prefix_with_unit(CHILD(i2), po)) {
@@ -1455,7 +1477,7 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 						}
 					}
 				}
-				return;
+				do_child_prefix = false;
 			}
 			break;
 		}
@@ -1480,11 +1502,10 @@ void MathStructure::setPrefixes(const PrintOptions &po, MathStructure *parent, s
 		}
 		default: {}
 	}
-	if(po.prefix || !has_prefix(*this)) {
-		for(size_t i = 0; i < SIZE; i++) {
-			if(CALCULATOR->aborted()) break;
-			CHILD(i).setPrefixes(po, this, i + 1);
-		}
+	for(size_t i = 0; i < SIZE; i++) {
+		if(CALCULATOR->aborted()) break;
+		if(do_child_prefix || (!CHILD(i).isUnit() && !CHILD(i).isPower() && !CHILD(i).isMultiplication() && !CHILD(i).isDivision() && !CHILD(i).isInverse() && !CHILD(i).isNegate())) CHILD(i).setPrefixes(po, this, i + 1);
+		else if(CHILD(i).isPower()) CHILD(i)[1].setPrefixes(po, &CHILD(i), 2);
 	}
 }
 bool split_unit_powers(MathStructure &mstruct);
@@ -2009,9 +2030,9 @@ void separate_units(MathStructure &m, MathStructure *parent = NULL, size_t index
 void set_unit_plural(MathStructure &m) {
 	if(m.isMultiplication()) {
 		for(size_t i = 1; i < m.size(); i++) {
-			if(is_unit_multiexp(m[i]) && !m[i - 1].containsType(STRUCT_UNIT, false, false, false) && (!m[i - 1].isNumber() || m[i - 1].number() > 1 || m[i - 1].number() < -1)) {
+			if(is_unit_multiexp_strict(m[i], i < m.size() - 1) && !m[i - 1].containsType(STRUCT_UNIT, false, false, false) && (!m[i - 1].isNumber() || m[i - 1].number() > 1 || m[i - 1].number() < -1)) {
 				while(true) {
-					if(i < m.size() - 1 && is_unit_multiexp(m[i + 1])) {
+					if(i < m.size() - 1 && is_unit_multiexp_strict(m[i + 1], true)) {
 						i++;
 					} else {
 						if(m[i].isDivision()) {
@@ -2682,12 +2703,13 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 	switch(parent.type()) {
 		case STRUCT_MULTIPLICATION: {
 			switch(m_type) {
-				case STRUCT_MULTIPLICATION: {return ((index > 1 && SIZE > 0) || po.excessive_parenthesis) && (!po.place_units_separately || !is_unit_multiexp(*this));}
-				case STRUCT_DIVISION: {return flat_division && (index < parent.size() || (po.excessive_parenthesis && (!po.place_units_separately || !is_unit_multiexp(*this) || (index > 0 && is_unit_multiexp(parent[index - 2])))));}
+				case STRUCT_MULTIPLICATION: {return ((index > 1 && SIZE > 0) || po.excessive_parenthesis) && (!po.place_units_separately || !is_unit_multiexp_strict(*this));}
+				case STRUCT_DIVISION: {return flat_division && (index < parent.size() || (po.excessive_parenthesis && (!po.place_units_separately || !is_unit_multiexp_strict(*this) || (index > 0 && is_unit_multiexp_strict(parent[index - 2])))));}
 				case STRUCT_INVERSE: {return flat_division;}
 				case STRUCT_ADDITION: {return true;}
-				case STRUCT_POWER: {return po.excessive_parenthesis && flat_power && (!po.place_units_separately || !CHILD(0).isUnit());}
-				case STRUCT_NEGATE: {return po.excessive_parenthesis || index > 1 || CHILD(0).needsParenthesis(po, ips, parent, index, flat_division, flat_power);}
+				case STRUCT_POWER: {return po.excessive_parenthesis && flat_power && (!po.place_units_separately || !CHILD(0).isUnit() || !CHILD(1).isInteger());}
+				case STRUCT_NEGATE: {
+					return index > 1 || CHILD(0).needsParenthesis(po, ips, parent, index, flat_division, flat_power) || (po.excessive_parenthesis && !is_unit_multiexp_strict(parent[index]));}
 				case STRUCT_BITWISE_AND: {return true;}
 				case STRUCT_BITWISE_OR: {return true;}
 				case STRUCT_BITWISE_XOR: {return true;}
@@ -2699,7 +2721,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart());}
+				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2730,7 +2752,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
 				case STRUCT_VECTOR: {return false;}
 				case STRUCT_NUMBER: {
-					return (flat_division || po.excessive_parenthesis) && (o_number.isInfinite() || o_number.hasImaginaryPart());
+					return (flat_division || po.excessive_parenthesis) && (o_number.isInfinite() || o_number.hasImaginaryPart() || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval())));
 				}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
@@ -2760,7 +2782,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return false;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return o_number.isInfinite();}
+				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (o_number.isNegative() && (index > 1 || po.excessive_parenthesis) && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2789,7 +2811,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return o_function->id() == FUNCTION_ID_UNCERTAINTY;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return o_number.isInfinite() || o_number.hasImaginaryPart();}
+				case STRUCT_NUMBER: {return o_number.isInfinite() || o_number.hasImaginaryPart() || (index == 1 && o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2817,7 +2839,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return false;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart());}
+				case STRUCT_NUMBER: {return o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2847,7 +2869,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return false;}
 				case STRUCT_FUNCTION: {return false;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return po.excessive_parenthesis && o_number.isInfinite();}
+				case STRUCT_NUMBER: {return (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (po.excessive_parenthesis && (o_number.isInfinite() || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()))));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2878,7 +2900,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return false;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return po.excessive_parenthesis && o_number.isInfinite();}
+				case STRUCT_NUMBER: {return (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (po.excessive_parenthesis && (o_number.isInfinite() || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()))));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2906,7 +2928,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return false;}
 				case STRUCT_VECTOR: {return false;}
-				case STRUCT_NUMBER: {return po.excessive_parenthesis && o_number.isInfinite();}
+				case STRUCT_NUMBER: {return po.excessive_parenthesis && (o_number.isInfinite() || (o_number.hasImaginaryPart() && o_number.hasRealPart()) || (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval())));}
 				case STRUCT_VARIABLE: {return false;}
 				case STRUCT_ABORTED: {return false;}
 				case STRUCT_SYMBOLIC: {return false;}
@@ -2936,7 +2958,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 				case STRUCT_COMPARISON: {return true;}
 				case STRUCT_FUNCTION: {return po.excessive_parenthesis;}
 				case STRUCT_VECTOR: {return po.excessive_parenthesis;}
-				case STRUCT_NUMBER: {return po.excessive_parenthesis;}
+				case STRUCT_NUMBER: {return po.excessive_parenthesis || (o_number.hasImaginaryPart() && o_number.hasRealPart());}
 				case STRUCT_VARIABLE: {return po.excessive_parenthesis;}
 				case STRUCT_ABORTED: {return po.excessive_parenthesis;}
 				case STRUCT_SYMBOLIC: {return po.excessive_parenthesis;}
@@ -2955,7 +2977,7 @@ bool MathStructure::needsParenthesis(const PrintOptions &po, const InternalPrint
 					case STRUCT_NEGATE: {return po.excessive_parenthesis;}
 					case STRUCT_FUNCTION: {return false;}
 					case STRUCT_VECTOR: {return false;}
-					case STRUCT_NUMBER: {return false;}
+					case STRUCT_NUMBER: {return po.excessive_parenthesis && (o_number.isNegative() && (po.interval_display != INTERVAL_DISPLAY_INTERVAL || !o_number.isInterval()));}
 					case STRUCT_VARIABLE: {return false;}
 					case STRUCT_ABORTED: {return false;}
 					case STRUCT_SYMBOLIC: {return false;}
@@ -3020,14 +3042,18 @@ int MathStructure::neededMultiplicationSign(const PrintOptions &po, const Intern
 	// do not display anything on front of the first factor (this function is normally not called in this case)
 	if(index <= 1) return MULTIPLICATION_SIGN_NONE;
 	// short multiplication is disabled or number base might use digits other than 0-9, alawys show multiplication symbol
-	if((!po.short_multiplication && (!po.place_units_separately || !is_unit_multiexp(*this))) || po.base > 10 || po.base < 2) {
+
+	if((!po.short_multiplication && (!po.place_units_separately || !is_unit_multiexp_strict(*this))) || po.base > 10 || po.base < 2) {
+		return MULTIPLICATION_SIGN_OPERATOR;
+	}
+	if(!po.short_multiplication && parent[index - 2].containsType(STRUCT_UNIT, false, false, false) && (!is_unit_multiexp_strict(parent[index - 2], false, true) || !is_unit_multiexp_strict(*this, false, true))) {
 		return MULTIPLICATION_SIGN_OPERATOR;
 	}
 	// no multiplication sign between factors in parentheses
 	if(par_prev && par) return MULTIPLICATION_SIGN_NONE;
 	if(par_prev) {
 		// (a)*u=(a) u
-		if(is_unit_multiexp(*this) && (po.short_multiplication || !parent[index - 2].containsType(STRUCT_UNIT, false, false, false))) return MULTIPLICATION_SIGN_SPACE;
+		if(is_unit_multiexp_strict(*this) && (po.short_multiplication || !parent[index - 2].containsType(STRUCT_UNIT, false, false, false))) return MULTIPLICATION_SIGN_SPACE;
 		if(isUnknown_exp()) {
 			// (a)*"xy"=(a) "xy", (a)*"xy"^b=(a) "xy"^b, (a)*x=(a)x, (a)*x^b=ax^b
 			return (namelen(isPower() ? CHILD(0) : *this, po, ips, NULL) > 1 ? MULTIPLICATION_SIGN_SPACE : MULTIPLICATION_SIGN_NONE);
@@ -3079,7 +3105,12 @@ int MathStructure::neededMultiplicationSign(const PrintOptions &po, const Intern
 			}
 			break;
 		}
-		case STRUCT_NEGATE: {break;}
+		case STRUCT_NEGATE: {
+			if(parent[index - 2][0].isUnit()) {
+				return MULTIPLICATION_SIGN_OPERATOR;
+			}
+			break;
+		}
 		case STRUCT_BITWISE_AND: {return MULTIPLICATION_SIGN_OPERATOR;}
 		case STRUCT_BITWISE_OR: {return MULTIPLICATION_SIGN_OPERATOR;}
 		case STRUCT_BITWISE_XOR: {return MULTIPLICATION_SIGN_OPERATOR;}
@@ -3170,7 +3201,7 @@ ostream& operator << (ostream &os, const MathStructure &mstruct) {
 	return os;
 }
 
-#define COLORIZE_AS_UNIT(x) (x.isUnit() || (x.isPower() && x[0].isUnit() && (x[1].isInteger() || (x[1].isNegate() && x[1][0].isInteger()))))
+#define COLORIZE_AS_UNIT(x) is_unit_exp_strict(x)
 
 string MathStructure::print(const PrintOptions &po, const InternalPrintStruct &ips) const {
 	return print(po, false, 0, TAG_TYPE_HTML, ips);
@@ -3211,6 +3242,8 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 		case STRUCT_NUMBER: {
 			if(colorize && tagtype == TAG_TYPE_TERMINAL) print_str = (colorize == 2 ? "\033[0;96m" : "\033[0;36m");
 			else if(colorize && tagtype == TAG_TYPE_HTML) print_str = (colorize == 2 ? "<span style=\"color:#AAFFFF\">" : "<span style=\"color:#005858\">");
+			size_t i_number = print_str.length();
+			size_t i_number_end = 0;
 			if(format && tagtype == TAG_TYPE_HTML && ips.power_depth <= 0) {
 				string exp;
 				bool exp_minus = false;
@@ -3219,6 +3252,7 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 					ips_n.exp_minus = &exp_minus;
 				}
 				print_str += o_number.print(po, ips_n);
+				i_number_end = print_str.length();
 				if(po.base != BASE_DECIMAL && po.base_display == BASE_DISPLAY_SUFFIX && !BASE_IS_SEXAGESIMAL(po.base) && po.base != BASE_TIME) {
 					int base = po.base;
 					if(base <= BASE_FP16 && base >= BASE_FP80) base = BASE_BINARY;
@@ -3268,9 +3302,21 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 				}
 			} else {
 				print_str += o_number.print(po, ips_n);
+				i_number_end = print_str.length();
 			}
 			if(colorize && tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
 			else if(colorize && tagtype == TAG_TYPE_HTML) print_str += "</span>";
+			if(!ips.wrap && ips.depth > 0 && o_number.isRational() && !o_number.isInteger() && po.base != BASE_CUSTOM && po.base != BASE_UNICODE) {
+				for(size_t i = i_number + 1; i + 1 < i_number_end; i++) {
+					if(print_str[i] == DIVISION_CH || ((unsigned char) print_str[i] == 0xE2 && (unsigned char) print_str[i + 1] == 0x88 && i + 2 < print_str.size() && (unsigned char) print_str[i + 2] == 0x95) || ((unsigned char) print_str[i] == 0xC3 && (unsigned char) print_str[i + 1] == 0xB7)) {
+						print_str.insert(0, "(");
+						print_str += ")";
+						break;
+					} else if(print_str[i] == DOT_CH || print_str[i] == COMMA_CH) {
+						break;
+					}
+				}
+			}
 			break;
 		}
 		case STRUCT_ABORTED: {}
@@ -3371,25 +3417,19 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 				break;
 			}
 			bool b_units = false;
-			bool par_prev = false;
+			int b_colorize_units = 0;
+			if(colorize && (tagtype == TAG_TYPE_TERMINAL || (tagtype == TAG_TYPE_HTML && ips.power_depth <= 0))) {
+				if(!po.short_multiplication) b_colorize_units = 1;
+				else b_colorize_units = -1;
+			}
+			bool avoid_sign = (!po.short_multiplication && ips.power_depth > 0 && format && tagtype == TAG_TYPE_HTML && po.base >= 2 && po.base <= 10 && po.multiplication_sign == MULTIPLICATION_SIGN_X);
+			int i_sign = 0;
+			bool wrap_next = false;
 			for(size_t i = 0; i < SIZE; i++) {
 				if(CALCULATOR->aborted()) return CALCULATOR->abortedMessage();
-				ips_n.wrap = CHILD(i).needsParenthesis(po, ips_n, *this, i + 1, true, flat_power);
+				if(i == 0) ips_n.wrap = CHILD(i).needsParenthesis(po, ips_n, *this, i + 1, true, flat_power);
+				else ips_n.wrap = wrap_next;
 				if(i > 0) {
-					int i_sign;
-					if(!po.short_multiplication && ips.power_depth > 0 && format && tagtype == TAG_TYPE_HTML && po.base >= 2 && po.base <= 10 && po.multiplication_sign == MULTIPLICATION_SIGN_X) {
-						PrintOptions po2 = po;
-						po2.short_multiplication = true;
-						i_sign = CHILD(i).neededMultiplicationSign(po2, ips_n, *this, i + 1, ips_n.wrap || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), par_prev, true, flat_power);
-						if(i_sign == MULTIPLICATION_SIGN_NONE) i_sign = MULTIPLICATION_SIGN_SPACE;
-					} else {
-						i_sign = CHILD(i).neededMultiplicationSign(po, ips_n, *this, i + 1, ips_n.wrap || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), par_prev, true, flat_power);
-					}
-					if(i_sign == MULTIPLICATION_SIGN_NONE && CHILD(i).isPower() && CHILD(i)[0].isUnit() && po.use_unicode_signs && po.abbreviate_names && CHILD(i)[0].unit() == CALCULATOR->getDegUnit()) {
-						PrintOptions po2 = po;
-						po2.use_unicode_signs = false;
-						i_sign = CHILD(i).neededMultiplicationSign(po2, ips_n, *this, i + 1, ips_n.wrap || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), par_prev, true, flat_power);
-					}
 					switch(i_sign) {
 						case MULTIPLICATION_SIGN_SPACE: {
 							if(is_unit_multiexp(CHILD(i)) && ((po.digit_grouping == DIGIT_GROUPING_LOCALE && CALCULATOR->local_digit_group_separator == THIN_SPACE) || (po.use_unicode_signs && (po.digit_grouping == DIGIT_GROUPING_STANDARD || (po.digit_grouping == DIGIT_GROUPING_LOCALE && CALCULATOR->local_digit_group_separator.empty()))
@@ -3414,26 +3454,55 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 						}
 						case MULTIPLICATION_SIGN_OPERATOR_SHORT: {
 							if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_DOT && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIDOT;
-							else if(po.use_unicode_signs && (po.multiplication_sign == MULTIPLICATION_SIGN_DOT || po.multiplication_sign == MULTIPLICATION_SIGN_ALTDOT || (po.place_units_separately && po.multiplication_sign == MULTIPLICATION_SIGN_X && CHILD(i).isUnit_exp() && CHILD(i - 1).isUnit_exp())) && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MIDDLEDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MIDDLEDOT;
+							else if(po.use_unicode_signs && (i_sign == MULTIPLICATION_SIGN_OPERATOR_SHORT || po.multiplication_sign == MULTIPLICATION_SIGN_DOT || po.multiplication_sign == MULTIPLICATION_SIGN_ALTDOT) && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MIDDLEDOT, po.can_display_unicode_string_arg))) print_str += SIGN_MIDDLEDOT;
 							else if(po.use_unicode_signs && po.multiplication_sign == MULTIPLICATION_SIGN_X && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (SIGN_MULTIPLICATION, po.can_display_unicode_string_arg))) print_str += SIGN_MULTIPLICATION;
 							else print_str += "*";
 							break;
 						}
 					}
 				}
-				if(!b_units && po.place_units_separately && colorize && (tagtype == TAG_TYPE_TERMINAL || (tagtype == TAG_TYPE_HTML && ips.power_depth <= 0))) {
-					b_units = true;
-					for(size_t i2 = i; i2 < SIZE; i2++) {
-						if(!COLORIZE_AS_UNIT(CHILD(i2))) {
-							b_units = false;
-							break;
+				if(i < SIZE - 1) {
+					i++;
+					wrap_next = CHILD(i).needsParenthesis(po, ips_n, *this, i + 1, true, flat_power);
+					if(avoid_sign) {
+						PrintOptions po2 = po;
+						po2.short_multiplication = true;
+						i_sign = CHILD(i).neededMultiplicationSign(po2, ips_n, *this, i + 1, wrap_next || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), ips_n.wrap, true, flat_power);
+						if(i_sign == MULTIPLICATION_SIGN_NONE) i_sign = MULTIPLICATION_SIGN_SPACE;
+					} else {
+						i_sign = CHILD(i).neededMultiplicationSign(po, ips_n, *this, i + 1, wrap_next || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), ips_n.wrap, true, flat_power);
+					}
+					if(i_sign == MULTIPLICATION_SIGN_NONE && CHILD(i).isPower() && CHILD(i)[0].isUnit() && po.use_unicode_signs && po.abbreviate_names && CHILD(i)[0].unit() == CALCULATOR->getDegUnit()) {
+						PrintOptions po2 = po;
+						po2.use_unicode_signs = false;
+						i_sign = CHILD(i).neededMultiplicationSign(po2, ips_n, *this, i + 1, wrap_next || (CHILD(i).isPower() && CHILD(i)[0].needsParenthesis(po, ips_n, CHILD(i), 1, true, flat_power)), ips_n.wrap, true, flat_power);
+					}
+					if(b_colorize_units < 2) {
+						if(i_sign == MULTIPLICATION_SIGN_OPERATOR_SHORT && b_colorize_units != 0 && (b_colorize_units < 0 || COLORIZE_AS_UNIT(CHILD(i))) && (b_units || COLORIZE_AS_UNIT(CHILD(i - 1)))) {
+							if(!b_units) {
+								if(b_colorize_units < 0) {
+									b_colorize_units = 2;
+									for(size_t i2 = i; i2 < SIZE; i2++) {
+										if(!COLORIZE_AS_UNIT(CHILD(i2))) b_colorize_units = 0;
+									}
+								}
+								if(b_colorize_units) {
+									b_units = true;
+									if(tagtype == TAG_TYPE_TERMINAL) print_str += (colorize == 2 ? "\033[0;92m" : "\033[0;32m");
+									else if(tagtype == TAG_TYPE_HTML) print_str += (colorize == 2 ? "<span style=\"color:#BBFFBB\">" : "<span style=\"color:#008000\">");
+								}
+							}
+						} else {
+							if(b_units) {
+								if(tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
+								else if(tagtype == TAG_TYPE_HTML) print_str += "</span>";
+								b_units = false;
+							}
 						}
 					}
-					if(b_units && tagtype == TAG_TYPE_TERMINAL) print_str += (colorize == 2 ? "\033[0;92m" : "\033[0;32m");
-					else if(colorize && b_units && tagtype == TAG_TYPE_HTML) print_str += (colorize == 2 ? "<span style=\"color:#BBFFBB\">" : "<span style=\"color:#008000\">");
+					i--;
 				}
 				print_str += CHILD(i).print(po, format, b_units ? 0 : colorize, tagtype, ips_n);
-				par_prev = ips_n.wrap;
 			}
 			if(b_units && tagtype == TAG_TYPE_TERMINAL) print_str += "\033[0m";
 			else if(b_units && tagtype == TAG_TYPE_HTML) print_str += "</span>";
