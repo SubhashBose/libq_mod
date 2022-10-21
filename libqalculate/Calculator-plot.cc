@@ -190,7 +190,7 @@ MathStructure Calculator::expressionToPlotVector(string expression, const MathSt
 bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool persistent) {
 	if(priv->persistent_plot) persistent = true;
 	FILE *pipe = NULL;
-	persistent = true
+	persistent = true;
 	if(!b_gnuplot_open || !gnuplot_pipe || persistent || commandline_extra != gnuplot_cmdline) {
 		if(!persistent) {
 			closeGnuplot();
