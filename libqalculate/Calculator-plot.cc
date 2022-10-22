@@ -207,6 +207,7 @@ bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool p
 		commandline += " - 2>/dev/null";
 		pipe = popen(commandline.c_str(), "w");
 #endif
+		printf("\n");
 		if(!pipe) {
 			error(true, _("Failed to invoke gnuplot. Make sure that you have gnuplot installed in your path."), NULL);
 			return false;
