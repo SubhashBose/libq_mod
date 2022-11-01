@@ -5475,11 +5475,15 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
+					if(c == '\n' || c == '\r') {
 						on_abort_display();
 						has_printed = false;
 					}
 				} else {
+					if (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL){
+						on_abort_display();
+						has_printed = false;
+					}
 					if(!result_only) {
 						printf(".");
 						fflush(stdout);
@@ -5891,10 +5895,13 @@ void execute_command(int command_type, bool show_result) {
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
+					if(c == '\n' || c == '\r') {
 						on_abort_command();
 					}
 				} else {
+					if(i_maxtimeREPL !=0 && i*200>i_maxtimeREPL) {
+						on_abort_command();
+					}
 					if(!result_only) {
 						printf(".");
 						fflush(stdout);
@@ -6593,12 +6600,17 @@ void execute_expression(bool goto_input, bool do_mathoperation, MathOperation op
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
+					if(c == '\n' || c == '\r') {
 						CALCULATOR->abort();
 						avoid_recalculation = true;
 						has_printed = 0;
 					}
 				} else {
+					if(i_maxtimeREPL !=0 && i*200>i_maxtimeREPL) {
+						CALCULATOR->abort();
+						avoid_recalculation = true;
+						has_printed = 0;
+					}
 					if(!result_only) {
 						has_printed++;
 						printf(".");
