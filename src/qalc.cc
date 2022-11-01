@@ -90,6 +90,7 @@ bool canfetch = true;
 bool programmers_mode = false;
 int b_decimal_comma = -1;
 long int i_maxtime = 0;
+long int i_maxtimeREPL = 0;
 struct timeval t_end;
 int dual_fraction = -1, saved_dual_fraction = -1;
 int dual_approximation = -1, saved_dual_approximation = -1;
@@ -2405,6 +2406,7 @@ int main(int argc, char *argv[]) {
 				i_maxtime += strtol(argv[i], NULL, 10);
 				if(i_maxtime < 0) i_maxtime = 0;
 			}
+			i_maxtimeREPL=i_maxtime;
 		} else if(!calc_arg_begun && (svar == "-set" || svar == "--set" || svar == "-s")) {
 			if(!svalue.empty()) {
 				set_option_strings.push_back(svalue);
@@ -5473,7 +5475,7 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r') {
+					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
 						on_abort_display();
 						has_printed = false;
 					}
@@ -5889,7 +5891,7 @@ void execute_command(int command_type, bool show_result) {
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r') {
+					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
 						on_abort_command();
 					}
 				} else {
@@ -6591,7 +6593,7 @@ void execute_expression(bool goto_input, bool do_mathoperation, MathOperation op
 #else
 					if(read(STDIN_FILENO, &c, 1) == -1) c = 0;
 #endif
-					if(c == '\n' || c == '\r') {
+					if(c == '\n' || c == '\r' || (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL)) {
 						CALCULATOR->abort();
 						avoid_recalculation = true;
 						has_printed = 0;
