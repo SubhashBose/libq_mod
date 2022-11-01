@@ -5483,6 +5483,9 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 					if (i_maxtimeREPL !=0 && i*200>i_maxtimeREPL){
 						on_abort_display();
 						has_printed = false;
+#ifndef _WIN32
+						i++;
+#endif
 					}
 					if(!result_only) {
 						printf(".");
@@ -5901,6 +5904,9 @@ void execute_command(int command_type, bool show_result) {
 				} else {
 					if(i_maxtimeREPL !=0 && i*200>i_maxtimeREPL) {
 						on_abort_command();
+#ifndef _WIN32
+						i++;
+#endif
 					}
 					if(!result_only) {
 						printf(".");
@@ -6610,6 +6616,9 @@ void execute_expression(bool goto_input, bool do_mathoperation, MathOperation op
 						CALCULATOR->abort();
 						avoid_recalculation = true;
 						has_printed = 0;
+#ifndef _WIN32
+						i++;
+#endif
 					}
 					if(!result_only) {
 						has_printed++;
