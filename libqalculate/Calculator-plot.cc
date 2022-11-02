@@ -190,7 +190,6 @@ MathStructure Calculator::expressionToPlotVector(string expression, const MathSt
 bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool persistent) {
 	if(priv->persistent_plot) persistent = true;
 	FILE *pipe = NULL;
-	persistent = true;
 	if(!b_gnuplot_open || !gnuplot_pipe || persistent || commandline_extra != gnuplot_cmdline) {
 		if(!persistent) {
 			closeGnuplot();
@@ -200,6 +199,7 @@ bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool p
 			commandline += " -persist";
 		}
 		commandline += commandline_extra;
+		printf("\n");
 #ifdef _WIN32
 		commandline += " - 2>nul";
 		pipe = _popen(commandline.c_str(), "w");
@@ -207,7 +207,6 @@ bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool p
 		commandline += " - 2>/dev/null";
 		pipe = popen(commandline.c_str(), "w");
 #endif
-		printf("\n");
 		if(!pipe) {
 			error(true, _("Failed to invoke gnuplot. Make sure that you have gnuplot installed in your path."), NULL);
 			return false;
