@@ -1497,9 +1497,8 @@ void set_option(string str) {
 				if((index = svar.find_last_of(SPACES)) != string::npos) {
 					svar = svar.substr(0, index);
 					remove_blank_ends(svar);
-					str = str.substr(index + 1);
-					remove_blank_ends(str);
-					svalue = str;
+					svalue = str.substr(index + 1);
+					remove_blank_ends(svalue);
 					gsub("_", " ", svar);
 					gsub(SIGN_MINUS, "-", svalue);
 					goto set_option_place;
@@ -2466,6 +2465,7 @@ int main(int argc, char *argv[]) {
 			enable_unicode = -1;
 		} else {
 			printops.use_unicode_signs = enable_unicode;
+			result_display_updated();
 		}
 	}
 
@@ -7057,7 +7057,7 @@ void load_preferences() {
 #endif
 
 
-	int version_numbers[] = {4, 4, 0};
+	int version_numbers[] = {4, 5, 0};
 
 	if(file) {
 		char line[10000];
