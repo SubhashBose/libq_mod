@@ -90,6 +90,7 @@ bool canfetch = true;
 bool programmers_mode = false;
 int b_decimal_comma = -1;
 long int i_maxtime = 0;
+long int i_maxtimeREPL = 0;
 struct timeval t_end;
 int dual_fraction = -1, saved_dual_fraction = -1;
 int dual_approximation = -1, saved_dual_approximation = -1;
@@ -2037,12 +2038,13 @@ bool show_object_info(string name) {
 						dp = ds->getNextProperty(&it);
 					}
 				}
+				/*
 				if(f->subtype() == SUBTYPE_USER_FUNCTION) {
 					CHECK_IF_SCREEN_FILLED_PUTS("");
 					ParseOptions pa = evalops.parse_options; pa.base = 10;
 					str = _("Expression:"); str += " "; str += CALCULATOR->unlocalizeExpression(((UserFunction*) f)->formula(), pa);
 					CHECK_IF_SCREEN_FILLED_PUTS(str.c_str());
-				}
+				}*/
 				CHECK_IF_SCREEN_FILLED_PUTS("");
 				break;
 			}
@@ -2071,6 +2073,7 @@ bool show_object_info(string name) {
 						break;
 					}
 					case SUBTYPE_ALIAS_UNIT: {
+						break; // SB mod
 						AliasUnit *au = (AliasUnit*) item;
 						PRINT_AND_COLON_TABS_INFO(_("Base Unit"));
 						string base_unit = au->firstBaseUnit()->print(false, printops.abbreviate_names, printops.use_unicode_signs);
@@ -3149,6 +3152,7 @@ int main(int argc, char *argv[]) {
 				i_maxtime += strtol(argv[i], NULL, 10);
 				if(i_maxtime < 0) i_maxtime = 0;
 			}
+			i_maxtimeREPL=i_maxtime;
 		} else if(!calc_arg_begun && (svar == "-set" || svar == "--set" || svar == "-s")) {
 			if(!svalue.empty()) {
 				set_option_strings.push_back(svalue);
@@ -3345,6 +3349,7 @@ int main(int argc, char *argv[]) {
 	if(!interactive_mode && (cfile || !calc_arg.empty())) {
 		CALCULATOR->forcePersistentPlot(true);
 	}
+	CALCULATOR->forcePersistentPlot(true);
 
 	if(!cfile && !calc_arg.empty()) {
 		if(calc_arg.length() > 2 && ((calc_arg[0] == '\"' && calc_arg.find('\"', 1) == calc_arg.length() - 1) || (calc_arg[0] == '\'' && calc_arg.find('\'', 1) == calc_arg.length() - 1))) {
@@ -5567,6 +5572,14 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 						has_printed = false;
 					}
 				} else {
+					if (i_maxtimeREPL !=0 && (long int) i*200>i_maxtimeREPL){
+						on_abort_display();
+						has_printed = false;
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(!result_only) {
 						printf(".");
 						fflush(stdout);
@@ -5982,6 +5995,13 @@ void execute_command(int command_type, bool show_result) {
 						on_abort_command();
 					}
 				} else {
+					if(i_maxtimeREPL !=0 && (long int) i*200>i_maxtimeREPL) {
+						on_abort_command();
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(!result_only) {
 						printf(".");
 						fflush(stdout);
@@ -6693,6 +6713,15 @@ void execute_expression(bool goto_input, bool do_mathoperation, MathOperation op
 						has_printed = 0;
 					}
 				} else {
+					if(i_maxtimeREPL !=0 && (long int) i*200>i_maxtimeREPL) {
+						CALCULATOR->abort();
+						avoid_recalculation = true;
+						has_printed = 0;
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(!result_only) {
 						has_printed++;
 						printf(".");

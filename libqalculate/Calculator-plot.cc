@@ -199,6 +199,7 @@ bool Calculator::invokeGnuplot(string commands, string commandline_extra, bool p
 			commandline += " -persist";
 		}
 		commandline += commandline_extra;
+		printf("\n");
 #ifdef _WIN32
 		commandline += " - 2>nul";
 		pipe = _popen(commandline.c_str(), "w");
