@@ -2379,7 +2379,7 @@ bool separate_vector_vars(MathStructure &m, const EvaluationOptions &eo, vector<
 				}
 			}
 			if(!b) {
-				vars.push_back((KnownVariable*) m.variable());
+				KnownVariable *mv = (KnownVariable*) m.variable();
 				m.clearVector();
 				for(size_t i = 0; i < mvar.size(); i++) {
 					if(mvar[i].containsInterval(true, false, false, 1, true)) {
@@ -2388,10 +2388,11 @@ bool separate_vector_vars(MathStructure &m, const EvaluationOptions &eo, vector<
 						v->ref();
 						v->destroy();
 					} else {
-						m[i].addChild(mvar[i]);
+						m.addChild(mvar[i]);
 					}
 					separate_vector_vars(m[i], eo, vars, values);
 				}
+				vars.push_back(mv);
 				values.push_back(m);
 			}
 			return true;
@@ -2411,6 +2412,15 @@ bool separate_vector_vars(MathStructure &m, const EvaluationOptions &eo, vector<
 				else if(eo.complex_number_form == COMPLEX_NUMBER_FORM_POLAR) complexToPolarForm(eo); \
 				else if(eo.complex_number_form == COMPLEX_NUMBER_FORM_CIS) complexToCisForm(eo);
 
+void replace_aborted_variables(MathStructure &m) {
+	if(m.isVariable() && m.variable()->isKnown() && !m.variable()->isRegistered() && m.variable()->referenceName().find(CALCULATOR->abortedMessage())) {
+		m.set(((KnownVariable*) m.variable())->get());
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		replace_aborted_variables(m[i]);
+	}
+}
+
 MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 
 	if(m_type == STRUCT_NUMBER) {FORMAT_COMPLEX_NUMBERS; return *this;}
@@ -2419,7 +2429,7 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 
 	unformat(eo);
 
-	if(m_type == STRUCT_UNDEFINED || m_type == STRUCT_ABORTED || m_type == STRUCT_DATETIME || m_type == STRUCT_UNIT || m_type == STRUCT_SYMBOLIC || (m_type == STRUCT_VARIABLE && !o_variable->isKnown())) return *this;
+	if(CALCULATOR->aborted() || m_type == STRUCT_UNDEFINED || m_type == STRUCT_ABORTED || m_type == STRUCT_DATETIME || m_type == STRUCT_UNIT || m_type == STRUCT_SYMBOLIC || (m_type == STRUCT_VARIABLE && !o_variable->isKnown())) return *this;
 
 	if(eo.structuring != STRUCTURING_NONE && eo.sync_units) {
 		convert_log_units(*this, eo);
@@ -2476,7 +2486,7 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 
 			// calculate non-differentiable functions (not handled by variance formula) and functions without uncertainties
 			if(eo.calculate_functions) calculate_nondifferentiable_functions(*this, feo, true, true, (eo.approximation != APPROXIMATION_EXACT && eo.approximation != APPROXIMATION_EXACT_VARIABLES && eo.calculate_variables) ? 2 : 1);
-
+			if(CALCULATOR->aborted()) return *this;
 			MathStructure munc, mbak(*this);
 			if(eo.approximation != APPROXIMATION_EXACT && eo.approximation != APPROXIMATION_EXACT_VARIABLES && eo.calculate_variables) {
 				// replace intervals with variables and calculate exact
@@ -2527,7 +2537,7 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 					vars[i]->destroy();
 				}
 
-				if(CALCULATOR->aborted()) return *this;
+				if(CALCULATOR->aborted()) {replace_aborted_variables(*this); return *this;}
 
 				// calculate each side of comparisons separately
 				if(eval_comparison_sides(*this, feo)) {
@@ -2535,7 +2545,9 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 					structure(eo.structuring, eo2, false);
 					if(eo.structuring != STRUCTURING_NONE) {simplify_ln(*this); simplify_roots(*this, eo);}
 					clean_multiplications(*this);
-				} else if(!CALCULATOR->aborted()) {
+				} else if(CALCULATOR->aborted()) {
+					replace_aborted_variables(*this);
+				} else {
 					CALCULATOR->error(false, _("Calculation of uncertainty propagation partially failed (using interval arithmetic instead when necessary)."), NULL);
 					EvaluationOptions eo4 = eo;
 					eo4.interval_calculation = INTERVAL_CALCULATION_INTERVAL_ARITHMETIC;
@@ -2556,11 +2568,9 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 					munc.clearVector();
 					for(size_t i = 0; i < SIZE; i++) {
 						if(CHILD(i).isVector()) {
+							munc.addChild(m_zero);
+							if(CHILD(i).size() > 0) munc[i].clearVector();
 							for(size_t i2 = 0; i2 < CHILD(i).size(); i2++) {
-								if(i2 == 0) {
-									munc.addChild(m_zero);
-									munc[i].clearVector();
-								}
 								munc[i].addChild(calculate_uncertainty(CHILD(i)[i2], eo, b_failed));
 								if(b_failed) break;
 							}
@@ -2587,11 +2597,9 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 						munc.clearVector();
 						for(size_t i = 0; i < mtest.size(); i++) {
 							if(mtest[i].isVector()) {
+								munc.addChild(m_zero);
+								if(mtest[i].size() > 0) munc[i].clearVector();
 								for(size_t i2 = 0; i2 < mtest[i].size(); i2++) {
-									if(i2 == 0) {
-										munc.addChild(m_zero);
-										munc[i].clearVector();
-									}
 									munc[i].addChild(calculate_uncertainty(mtest[i][i2], eo, b_failed));
 									if(b_failed) break;
 								}
@@ -2651,7 +2659,7 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 				CALCULATOR->endTemporaryStopMessages(!b_failed);
 				if(b_failed) {
 					set(mbak);
-					if(CALCULATOR->aborted()) return *this;
+					if(CALCULATOR->aborted()) {replace_aborted_variables(*this); return *this;}
 					CALCULATOR->error(false, _("Calculation of uncertainty propagation failed (using interval arithmetic instead)."), NULL);
 					EvaluationOptions eo3 = eo;
 					eo3.interval_calculation = INTERVAL_CALCULATION_INTERVAL_ARITHMETIC;

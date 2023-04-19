@@ -1634,7 +1634,7 @@ bool show_set_help(string set_option = "") {
 	STR_AND_TABS_BOOL("units", "", "", evalops.parse_options.units_enabled);
 	STR_AND_TABS_BOOL("unknowns", "", _("Interpret undefined symbols in expressions as unknown variables."), evalops.parse_options.unknowns_enabled);
 	STR_AND_TABS_BOOL("variables", "var", "", evalops.parse_options.variables_enabled);
-	STR_AND_TABS_BOOL("variable units", "varunit", _("If activated physical constants include units (e.g. c = 299 792 458 m∕s)."), CALCULATOR->variableUnitsEnabled());
+	STR_AND_TABS_BOOL("variable units", "varunits", _("If activated physical constants include units (e.g. c = 299 792 458 m∕s)."), CALCULATOR->variableUnitsEnabled());
 
 	CHECK_IF_SCREEN_FILLED_HEADING_S(_("Generic Display Options"));
 
@@ -4510,7 +4510,7 @@ int main(int argc, char *argv[]) {
 			PRINT_AND_COLON_TABS(_("units"), ""); str += b2oo(evalops.parse_options.units_enabled, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("unknowns"), ""); str += b2oo(evalops.parse_options.unknowns_enabled, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("variables"), "var"); str += b2oo(evalops.parse_options.variables_enabled, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
-			PRINT_AND_COLON_TABS(_("variable units"), "varunit"); str += b2oo(CALCULATOR->variableUnitsEnabled(), false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
+			PRINT_AND_COLON_TABS(_("variable units"), "varunits"); str += b2oo(CALCULATOR->variableUnitsEnabled(), false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 
 			CHECK_IF_SCREEN_FILLED_HEADING(_("Generic Display Options"));
 
@@ -6656,6 +6656,7 @@ void execute_expression(bool goto_input, bool do_mathoperation, MathOperation op
 		clock_gettime(CLOCK_MONOTONIC, &tv);
 		long int i_timeleft = ((long int) t_end.tv_sec - tv.tv_sec) * 1000 + (t_end.tv_usec - tv.tv_nsec / 1000) / 1000;
 #endif
+		if(i_timeleft <= 0 && CALCULATOR->busy()) sleep_ms(10);
 		while(CALCULATOR->busy() && i_timeleft > 0) {
 			sleep_ms(10);
 			i_timeleft -= 10;
@@ -7154,7 +7155,7 @@ void load_preferences() {
 #endif
 
 
-	int version_numbers[] = {4, 6, 0};
+	int version_numbers[] = {4, 6, 1};
 
 	if(file) {
 		char line[10000];
