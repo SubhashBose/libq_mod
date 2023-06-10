@@ -325,21 +325,8 @@ bool Calculator::calculateRPN(MathFunction *f, int msecs, const EvaluationOption
 				iregs++;
 			}
 			if(!fill_vector && f->getArgumentDefinition(i) && f->getArgumentDefinition(i)->type() == ARGUMENT_TYPE_ANGLE) {
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {
-						(*mstruct)[i - 1].multiply(getDegUnit());
-						break;
-					}
-					case ANGLE_UNIT_GRADIANS: {
-						(*mstruct)[i - 1].multiply(getGraUnit());
-						break;
-					}
-					case ANGLE_UNIT_RADIANS: {
-						(*mstruct)[i - 1].multiply(getRadUnit());
-						break;
-					}
-					default: {}
-				}
+				Unit *u = default_angle_unit(eo);
+				if(u) (*mstruct)[i - 1].multiply(u);
 			}
 		}
 		if(fill_vector) mstruct->childrenUpdated();
@@ -450,21 +437,8 @@ MathStructure *Calculator::calculateRPN(MathFunction *f, const EvaluationOptions
 				iregs++;
 			}
 			if(!fill_vector && f->getArgumentDefinition(i) && f->getArgumentDefinition(i)->type() == ARGUMENT_TYPE_ANGLE) {
-				switch(eo.parse_options.angle_unit) {
-					case ANGLE_UNIT_DEGREES: {
-						(*mstruct)[i - 1].multiply(getDegUnit());
-						break;
-					}
-					case ANGLE_UNIT_GRADIANS: {
-						(*mstruct)[i - 1].multiply(getGraUnit());
-						break;
-					}
-					case ANGLE_UNIT_RADIANS: {
-						(*mstruct)[i - 1].multiply(getRadUnit());
-						break;
-					}
-					default: {}
-				}
+				Unit *u = default_angle_unit(eo);
+				if(u) (*mstruct)[i - 1].multiply(u);
 			}
 		}
 		if(fill_vector) mstruct->childrenUpdated();
@@ -1332,7 +1306,8 @@ void calculate_dual_exact(MathStructure &mstruct_exact, MathStructure *mstruct, 
 		evalops.expand = -2;
 		CALCULATOR->beginTemporaryStopMessages();
 		if(msecs > 0) CALCULATOR->startControl(msecs);
-		mstruct_exact = CALCULATOR->calculate(original_expression, evalops);
+		MathStructure tmp_parse;
+		mstruct_exact = CALCULATOR->calculate(original_expression, evalops, &tmp_parse);
 		if(CALCULATOR->aborted() || mstruct_exact.isApproximate() || (dual_approximation < 0 && max_size > 0 && (test_max_addition_size(mstruct_exact, (size_t) max_size) || mstruct_exact.countTotalChildren(false) > (size_t) max_size * 6))) {
 			mstruct_exact.setUndefined();
 		} else if(test_simplified(mstruct_exact)) {

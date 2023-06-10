@@ -81,6 +81,7 @@ ParsingMode nonrpn_parsing_mode = PARSING_MODE_ADAPTIVE, saved_parsing_mode;
 bool saved_percent;
 bool rpn_mode = false, saved_rpn_mode = false;
 bool caret_as_xor = false, saved_caret_as_xor = false;
+string custom_angle_unit, saved_custom_angle_unit;
 bool use_readline = true;
 bool interactive_mode;
 int colorize = 0;
@@ -475,7 +476,7 @@ void handle_exit() {
 			}
 		}
 	}
-	if(interactive_mode) {
+	if(interactive_mode && !load_defaults) {
 		if(save_mode_on_exit) {
 			save_mode();
 		} else {
@@ -1094,11 +1095,22 @@ void set_option(string str) {
 		else if(EQUALS_IGNORECASE_AND_LOCAL(svalue, "gra", _("gra")) || EQUALS_IGNORECASE_AND_LOCAL(svalue, "gradians", _("gradians"))) v = ANGLE_UNIT_GRADIANS;
 		//no angle unit
 		else if(EQUALS_IGNORECASE_AND_LOCAL(svalue, "none", _("none"))) v = ANGLE_UNIT_NONE;
+		else if(EQUALS_IGNORECASE_AND_LOCAL(svalue, "custom", _("custom"))) v = ANGLE_UNIT_CUSTOM;
 		else if(!empty_value && svalue.find_first_not_of(SPACES NUMBERS) == string::npos) {
 			v = s2i(svalue);
+		} else {
+			Unit *u = CALCULATOR->getActiveUnit(svalue);
+			if(u && u->baseUnit() == CALCULATOR->getRadUnit() && u->baseExponent() == 1) {
+				if(u == CALCULATOR->getRadUnit()) v = ANGLE_UNIT_RADIANS;
+				else if(u == CALCULATOR->getGraUnit()) v = ANGLE_UNIT_GRADIANS;
+				else if(u == CALCULATOR->getDegUnit()) v = ANGLE_UNIT_DEGREES;
+				else {v = ANGLE_UNIT_CUSTOM; CALCULATOR->setCustomAngleUnit(u);}
+			}
 		}
-		if(v < 0 || v > 3) {
+		if(v < 0 || v > 4) {
 			PUTS_UNICODE(_("Illegal value."));
+		} else if(v == ANGLE_UNIT_CUSTOM && !CALCULATOR->customAngleUnit()) {
+			PUTS_UNICODE(_("Please specify a custom angle unit as argument (e.g. set angle arcsec)."));
 		} else {
 			evalops.parse_options.angle_unit = (AngleUnit) v;
 			hide_parse_errors = true;
@@ -1564,6 +1576,8 @@ bool show_set_help(string set_option = "") {
 
 	string str;
 
+	if(set_option == "parse") set_option = "syntax";
+
 	if(set_option.empty()) {
 		CHECK_IF_SCREEN_FILLED_PUTS(_("Sets the value of an option."));
 		CHECK_IF_SCREEN_FILLED_PUTS(_("Example: set base 16."));
@@ -1610,7 +1624,7 @@ bool show_set_help(string set_option = "") {
 
 	CHECK_IF_SCREEN_FILLED_HEADING_S(_("Calculation"));
 
-	STR_AND_TABS_3("angle unit", "angle", _("Default angle unit for trigonometric functions."), evalops.parse_options.angle_unit, _("none"), _("radians"), _("degrees"), _("gradians"));
+	STR_AND_TABS_4("angle unit", "angle", _("Default angle unit for trigonometric functions."), evalops.parse_options.angle_unit, _("none"), _("radians"), _("degrees"), _("gradians"), evalops.parse_options.angle_unit == ANGLE_UNIT_CUSTOM && CALCULATOR->customAngleUnit() ? CALCULATOR->customAngleUnit()->referenceName() : _("custom"));
 	int appr = evalops.approximation;
 	if(dual_approximation < 0) appr = -1;
 	else if(dual_approximation > 0) appr = 3;
@@ -2043,6 +2057,9 @@ bool show_object_info(string name) {
 					CHECK_IF_SCREEN_FILLED_PUTS("");
 					ParseOptions pa = evalops.parse_options; pa.base = 10;
 					str = _("Expression:"); str += " "; str += CALCULATOR->unlocalizeExpression(((UserFunction*) f)->formula(), pa);
+					for(size_t i2 = 1; i2 <= ((UserFunction*) f)->countSubfunctions(); i2++) {
+						gsub(string("\\") + i2s(i2), ((UserFunction*) f)->getSubfunction(i2), str);
+					}
 					CHECK_IF_SCREEN_FILLED_PUTS(str.c_str());
 				}*/
 				CHECK_IF_SCREEN_FILLED_PUTS("");
@@ -3281,6 +3298,12 @@ int main(int argc, char *argv[]) {
 	//load local definitions
 	if(!unittest) CALCULATOR->loadLocalDefinitions();
 
+	if(!custom_angle_unit.empty()) {
+		CALCULATOR->setCustomAngleUnit(CALCULATOR->getActiveUnit(custom_angle_unit));
+		if(!first_time && CALCULATOR->customAngleUnit()) saved_custom_angle_unit = CALCULATOR->customAngleUnit()->referenceName();
+		if(evalops.parse_options.angle_unit == ANGLE_UNIT_CUSTOM && !CALCULATOR->customAngleUnit()) evalops.parse_options.angle_unit = ANGLE_UNIT_NONE;
+	}
+
 	if(do_imaginary_j && CALCULATOR->getVariableById(VARIABLE_ID_I)->hasName("j") == 0) {
 		ExpressionName ename = CALCULATOR->getVariableById(VARIABLE_ID_I)->getName(1);
 		ename.name = "j";
@@ -4471,6 +4494,7 @@ int main(int argc, char *argv[]) {
 				case ANGLE_UNIT_RADIANS: {str += _("rad"); break;}
 				case ANGLE_UNIT_DEGREES: {str += _("rad"); break;}
 				case ANGLE_UNIT_GRADIANS: {str += _("gra"); break;}
+				case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {str += CALCULATOR->customAngleUnit()->referenceName();} else {str += _("none");} break;}
 				default: {str += _("none"); break;}
 			}
 			CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
@@ -4726,7 +4750,6 @@ int main(int argc, char *argv[]) {
 
 			CHECK_IF_SCREEN_FILLED_HEADING(_("Units"));
 
-			CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("all prefixes"), "allpref"); str += b2oo(printops.use_all_prefixes, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("autoconversion"), "conv");
 			switch(evalops.auto_post_conversion) {
@@ -7322,9 +7345,11 @@ void load_preferences() {
 					if(version_numbers[0] == 0 && (version_numbers[1] < 7 || (version_numbers[1] == 7 && version_numbers[2] == 0))) {
 						v++;
 					}
-					if(v >= ANGLE_UNIT_NONE && v <= ANGLE_UNIT_GRADIANS) {
+					if(v >= ANGLE_UNIT_NONE && v <= ANGLE_UNIT_CUSTOM) {
 						evalops.parse_options.angle_unit = (AngleUnit) v;
 					}
+				} else if(svar == "custom_angle_unit") {
+					custom_angle_unit = svalue;
 				} else if(svar == "caret_as_xor") {
 					caret_as_xor = v;
 				} else if(svar == "functions_enabled") {
@@ -7569,6 +7594,8 @@ bool save_preferences(bool mode) {
 			saved_caret_as_xor = saved_caret;
 		} else {
 			set_saved_mode();
+			if(CALCULATOR->customAngleUnit()) saved_custom_angle_unit = CALCULATOR->customAngleUnit()->referenceName();
+			else saved_custom_angle_unit = "";
 		}
 		if(saved_df != 0) saved_dual_fraction = saved_df;
 		if(saved_da != 0) saved_dual_approximation = saved_da;
@@ -7609,6 +7636,7 @@ bool save_preferences(bool mode) {
 	fprintf(file, "warn_about_denominators_assumed_nonzero=%i\n", saved_evalops.warn_about_denominators_assumed_nonzero);
 	fprintf(file, "structuring=%i\n", saved_evalops.structuring);
 	fprintf(file, "angle_unit=%i\n", saved_evalops.parse_options.angle_unit);
+	if(!saved_custom_angle_unit.empty() && saved_custom_angle_unit != "rad") fprintf(file, "custom_angle_unit=%s\n", saved_custom_angle_unit.c_str());
 	fprintf(file, "caret_as_xor=%i\n", saved_caret_as_xor);
 	fprintf(file, "functions_enabled=%i\n", saved_evalops.parse_options.functions_enabled);
 	fprintf(file, "variables_enabled=%i\n", saved_evalops.parse_options.variables_enabled);

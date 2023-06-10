@@ -1204,6 +1204,35 @@ MathStructure *last_is_function(MathStructure &m) {
 #define PARSING_MODE (po.parsing_mode & ~PARSE_PERCENT_AS_ORDINARY_CONSTANT)
 #define BASE_2_10 ((po.base >= 2 && po.base <= 10) || (po.base < BASE_CUSTOM && po.base != BASE_UNICODE && po.base != BASE_BIJECTIVE_26) || (po.base == BASE_CUSTOM && priv->custom_input_base_i <= 10))
 
+bool find_vector(const string &str, size_t index) {
+	return true;
+	if(str.find(LEFT_VECTOR_WRAP, index) != string::npos) return true;
+	if(str.find_first_not_of(NOT_IN_NAMES, index) == string::npos) return false;
+	MathFunction *f = NULL;
+	for(size_t i = 0; i < 4; i++) {
+		if(i == 0) f = CALCULATOR->getFunctionById(FUNCTION_ID_MATRIX);
+		else if(i == 1) f = CALCULATOR->getFunctionById(FUNCTION_ID_VECTOR);
+		else if(i == 2) f = CALCULATOR->getFunctionById(FUNCTION_ID_GENERATE_VECTOR);
+		else if(i == 3) f = CALCULATOR->getFunctionById(FUNCTION_ID_IDENTITY);
+		for(size_t i2 = 1; f && i2 <= f->countNames(); i2++) {
+			if(str.find(f->getName(i2).name, index) != string::npos) return true;
+		}
+	}
+	return false;
+}
+
+bool contains_entrywise_vector(const MathStructure &m) {
+	if(m.isFunction() && (m.function()->id() == FUNCTION_ID_ENTRYWISE_MULTIPLICATION || m.function()->id() == FUNCTION_ID_ENTRYWISE_DIVISION || m.function()->id() == FUNCTION_ID_ENTRYWISE_POWER)) {
+		for(size_t i = 0; i < m.size(); i++) {
+			if(!m[i].representsScalar()) return true;
+		}
+	}
+	for(size_t i = 0; i < m.size(); i++) {
+		if(contains_entrywise_vector(m[i])) return true;
+	}
+	return false;
+}
+
 void Calculator::parse(MathStructure *mstruct, string str, const ParseOptions &parseoptions) {
 
 	ParseOptions po = parseoptions;
@@ -1342,11 +1371,14 @@ void Calculator::parse(MathStructure *mstruct, string str, const ParseOptions &p
 	if(str.find_first_of(BITWISE_AND BITWISE_OR LOGICAL_NOT) != string::npos) ascii_bitwise = 1;
 
 	bool test_or_parallel = (str.find("||") != string::npos);
+	int test_entrywise = -1;
 
 	// replace alternative strings (primarily operators) with default ascii versions
 	parseSigns(str, true);
 
 	if(test_or_parallel) test_or_parallel = (str.find("&&") == string::npos && str.find('\x14') == string::npos);
+
+	string str_bak = str;
 
 	// parse quoted string as symbolic MathStructure
 	for(size_t str_index = 0; str_index < str.length(); str_index++) {
@@ -2106,12 +2138,24 @@ void Calculator::parse(MathStructure *mstruct, string str, const ParseOptions &p
 						i3++;
 						i4 = i3;
 					}
-					if(ifac == 2) stmp += i2s(parseAddId(f_factorial2, stmp2, po));
-					else if(ifac == 1) stmp += i2s(parseAddId(f_factorial, stmp2, po));
-					else stmp += i2s(parseAddIdAppend(f_multifactorial, MathStructure(ifac, 1, 0), stmp2, po));
-					stmp += ID_WRAP_RIGHT RIGHT_PARENTHESIS;
-					str.replace(i5 - stmp2.length() + 1, stmp2.length() + i4 - i5 - 1, stmp);
-					str_index = stmp.length() + i5 - stmp2.length();
+					MathFunction *f = NULL;
+					if(ifac == 2) f = f_factorial2;
+					else if(ifac == 1) f = f_factorial;
+					else f = f_multifactorial;
+					if(f) {
+						if(!f->isActive()) {
+							MathFunction *f2 = NULL;
+							if(ifac == 2) f2 = getActiveFunction("factorial2");
+							else if(ifac == 1) f2 = getActiveFunction("factorial");
+							else f2 = getActiveFunction("multifactorial");
+							if(f2) f = f2;
+						}
+						if(ifac > 2) stmp += i2s(parseAddIdAppend(f, MathStructure(ifac, 1, 0), stmp2, po));
+						else stmp += i2s(parseAddId(f, stmp2, po));
+						stmp += ID_WRAP_RIGHT RIGHT_PARENTHESIS;
+						str.replace(i5 - stmp2.length() + 1, stmp2.length() + i4 - i5 - 1, stmp);
+						str_index = stmp.length() + i5 - stmp2.length();
+					}
 				}
 			}
 		} else if(PARSING_MODE != PARSING_MODE_RPN && (str[str_index] == 'c' || str[str_index] == 'C') && str.length() > str_index + 6 && str[str_index + 5] == SPACE_CH && (str_index == 0 || is_in(OPERATORS INTERNAL_OPERATORS PARENTHESISS, str[str_index - 1])) && compare_name_no_case("compl", str, 5, str_index, base)) {
@@ -2343,7 +2387,14 @@ void Calculator::parse(MathStructure *mstruct, string str, const ParseOptions &p
 					str_index += stmp.length() - 1;
 				}
 			}
-		} else if(str[str_index] == DOT_CH && !po.rpn && str_index > 0 && str_index < str.length() - 1 && (is_not_number(str[str_index - 1], base) || str.find(LEFT_VECTOR_WRAP, str_index + 2) != string::npos) && is_not_number(str[str_index + 1], base) && is_not_in(INTERNAL_OPERATORS OPERATORS "\\", str[str_index - 1]) && (((str[str_index + 1] == POWER_CH || str[str_index + 1] == MULTIPLICATION_CH || str[str_index + 1] == DIVISION_CH) && str_index + 1 < str.length() - 1 && str[str_index + 2] != str[str_index + 1]) || is_not_in(INTERNAL_OPERATORS OPERATORS "\\", str[str_index + 1])) && (str[str_index - 1] != DOT_CH || str[str_index + 1] != DOT_CH)) {
+		} else if(str[str_index] == DOT_CH && !po.rpn && str_index > 0 && str_index < str.length() - 1 && (is_not_number(str[str_index - 1], base) || find_vector(str, str_index + 2)) && is_not_number(str[str_index + 1], base) && is_not_in(INTERNAL_OPERATORS OPERATORS "\\", str[str_index - 1]) && (((str[str_index + 1] == POWER_CH || str[str_index + 1] == MULTIPLICATION_CH || str[str_index + 1] == DIVISION_CH) && str_index + 1 < str.length() - 1 && str[str_index + 2] != str[str_index + 1]) || is_not_in(INTERNAL_OPERATORS OPERATORS "\\", str[str_index + 1])) && (str[str_index - 1] != DOT_CH || str[str_index + 1] != DOT_CH)) {
+			if(is_not_number(str[str_index - 1], base)) {
+				test_entrywise = 0;
+			} else if(str[str_index + 1] != MULTIPLICATION_CH && str[str_index + 1] != DIVISION_CH && str[str_index + 1] != POWER_CH) {
+				continue;
+			} else if(test_entrywise < 0) {
+				test_entrywise = 1;
+			}
 			if(str[str_index + 1] == MULTIPLICATION_CH) str.replace(str_index, 2, "\x17");
 			else if(str[str_index + 1] == DIVISION_CH) str.replace(str_index, 2, "\x18");
 			else if(str[str_index + 1] == POWER_CH) str.replace(str_index, 2, "\x19");
@@ -3122,25 +3173,21 @@ void Calculator::parse(MathStructure *mstruct, string str, const ParseOptions &p
 		}
 	}
 
-	if(test_or_parallel) {
-		beginTemporaryStopMessages();
-		unordered_map<size_t, size_t> ids_ref_bak = priv->ids_ref;
-		for(unordered_map<size_t, size_t>::iterator it = priv->ids_ref.begin(); it != priv->ids_ref.end(); ++it) {
-			it->second++;
-		}
+	parseOperators(mstruct, str, po);
+
+	if(test_or_parallel && contains_parallel(*mstruct)) {
+		gsub("||", "\x14", str);
 		parseOperators(mstruct, str, po);
-		if(contains_parallel(*mstruct)) {
-			endTemporaryStopMessages();
-			gsub("||", "\x14", str);
-			parseOperators(mstruct, str, po);
-		} else {
-			endTemporaryStopMessages(true);
+		return;
+	}
+	if(test_entrywise > 0) {
+		if(!contains_entrywise_vector(*mstruct)) {
+			gsub("./", "/", str_bak);
+			gsub(".^", "^", str_bak);
+			gsub(".*", "*", str_bak);
+			parse(mstruct, str_bak, po);
+			return;
 		}
-		for(unordered_map<size_t, size_t>::iterator it = ids_ref_bak.begin(); it != ids_ref_bak.end(); ++it) {
-			delId(it->first);
-		}
-	} else {
-		parseOperators(mstruct, str, po);
 	}
 
 	if(is_boolean_algebra_expression(*mstruct, ascii_bitwise)) {
@@ -3665,10 +3712,11 @@ bool Calculator::parseOperators(MathStructure *mstruct, string str, const ParseO
 									break;
 								}
 								case '\x1c': {
-									if(po.angle_unit != ANGLE_UNIT_NONE && po.angle_unit != ANGLE_UNIT_RADIANS && mstack.back()->contains(getRadUnit(), false, true, true) <= 0 && mstack.back()->contains(getGraUnit(), false, true, true) <= 0 && mstack.back()->contains(getDegUnit(), false, true, true) <= 0) {
+									if(!DEFAULT_RADIANS(po.angle_unit) && !contains_angle_unit(mstack.back(), po)) {
 										switch(po.angle_unit) {
 											case ANGLE_UNIT_DEGREES: {mstack.back()->multiply(getDegUnit()); break;}
 											case ANGLE_UNIT_GRADIANS: {mstack.back()->multiply(getGraUnit()); break;}
+											case ANGLE_UNIT_CUSTOM: {if(customAngleUnit()) {mstack.back()->multiply(customAngleUnit());} break;}
 											default: {}
 										}
 									}
@@ -3782,10 +3830,11 @@ bool Calculator::parseOperators(MathStructure *mstruct, string str, const ParseO
 					} else if(str[i] == BITWISE_NOT_CH) {
 						mstack.back()->transform(STRUCT_BITWISE_NOT);
 					} else if(str[i] == '\x1c') {
-						if(po.angle_unit != ANGLE_UNIT_NONE && po.angle_unit != ANGLE_UNIT_RADIANS && mstack.back()->contains(getRadUnit(), false, true, true) <= 0 && mstack.back()->contains(getGraUnit(), false, true, true) <= 0 && mstack.back()->contains(getDegUnit(), false, true, true) <= 0) {
+						if(!DEFAULT_RADIANS(po.angle_unit) && !contains_angle_unit(mstack.back(), po)) {
 							switch(po.angle_unit) {
 								case ANGLE_UNIT_DEGREES: {mstack.back()->multiply(getDegUnit()); break;}
 								case ANGLE_UNIT_GRADIANS: {mstack.back()->multiply(getGraUnit()); break;}
+								case ANGLE_UNIT_CUSTOM: {if(customAngleUnit()) {mstack.back()->multiply(customAngleUnit());} break;}
 								default: {}
 							}
 						}
@@ -3896,10 +3945,11 @@ bool Calculator::parseOperators(MathStructure *mstruct, string str, const ParseO
 							break;
 						}
 						case '\x1c': {
-							if(po.angle_unit != ANGLE_UNIT_NONE && po.angle_unit != ANGLE_UNIT_RADIANS && mstack.back()->contains(getRadUnit(), false, true, true) <= 0 && mstack.back()->contains(getGraUnit(), false, true, true) <= 0 && mstack.back()->contains(getDegUnit(), false, true, true) <= 0) {
+							if(!DEFAULT_RADIANS(po.angle_unit) && !contains_angle_unit(mstack.back(), po)) {
 								switch(po.angle_unit) {
 									case ANGLE_UNIT_DEGREES: {mstack.back()->multiply(getDegUnit()); break;}
 									case ANGLE_UNIT_GRADIANS: {mstack.back()->multiply(getGraUnit()); break;}
+									case ANGLE_UNIT_CUSTOM: {if(customAngleUnit()) {mstack.back()->multiply(customAngleUnit());} break;}
 									default: {}
 								}
 							}
@@ -4347,10 +4397,11 @@ bool Calculator::parseOperators(MathStructure *mstruct, string str, const ParseO
 					}
 					case '\x1c': {
 						if(parseAdd(str2, mstruct, po, OPERATION_MULTIPLY)) {
-							if(po.angle_unit != ANGLE_UNIT_NONE && po.angle_unit != ANGLE_UNIT_RADIANS && mstruct->last().contains(getRadUnit(), false, true, true) <= 0 && mstruct->last().contains(getGraUnit(), false, true, true) <= 0 && mstruct->last().contains(getDegUnit(), false, true, true) <= 0) {
+							if(!DEFAULT_RADIANS(po.angle_unit) && !contains_angle_unit(mstruct->last(), po)) {
 								switch(po.angle_unit) {
 									case ANGLE_UNIT_DEGREES: {mstruct->last().multiply(getDegUnit()); break;}
 									case ANGLE_UNIT_GRADIANS: {mstruct->last().multiply(getGraUnit()); break;}
+									case ANGLE_UNIT_CUSTOM: {if(customAngleUnit()) {mstruct->last().multiply(customAngleUnit());} break;}
 									default: {}
 								}
 							}
@@ -4923,10 +4974,11 @@ bool Calculator::parseOperators(MathStructure *mstruct, string str, const ParseO
 		if(i != 0) parseAdd(str2, mstruct, po);
 		else mstruct->set(1, 1, 0);
 		if(parseAdd(str, mstruct, po, OPERATION_MULTIPLY)) {
-			if(po.angle_unit != ANGLE_UNIT_NONE && po.angle_unit != ANGLE_UNIT_RADIANS && mstruct->last().contains(getRadUnit(), false, true, true) <= 0 && mstruct->last().contains(getGraUnit(), false, true, true) <= 0 && mstruct->last().contains(getDegUnit(), false, true, true) <= 0) {
+			if(!DEFAULT_RADIANS(po.angle_unit) && !contains_angle_unit(mstruct->last(), po)) {
 				switch(po.angle_unit) {
 					case ANGLE_UNIT_DEGREES: {mstruct->last().multiply(getDegUnit()); break;}
 					case ANGLE_UNIT_GRADIANS: {mstruct->last().multiply(getGraUnit()); break;}
+					case ANGLE_UNIT_CUSTOM: {if(customAngleUnit()) {mstruct->last().multiply(customAngleUnit());} break;}
 					default: {}
 				}
 			}
