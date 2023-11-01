@@ -99,7 +99,6 @@ MathStructure::MathStructure(const MathStructure &o) {
 		}
 		case STRUCT_UNIT: {
 			o_unit = o.unit();
-			o_prefix = o.prefix();
 			if(o_unit) o_unit->ref();
 			b_plural = o.isPlural();
 			break;
@@ -110,6 +109,7 @@ MathStructure::MathStructure(const MathStructure &o) {
 		}
 		default: {}
 	}
+	o_prefix = o.prefix();
 	b_protected = o.isProtected();
 	for(size_t i = 0; i < o.size(); i++) {
 		APPEND_COPY((&o[i]))
@@ -304,7 +304,6 @@ void MathStructure::set_nocopy(MathStructure &o, bool merge_precision) {
 		}
 		case STRUCT_UNIT: {
 			o_unit = o.unit();
-			o_prefix = o.prefix();
 			if(o_unit) o_unit->ref();
 			b_plural = o.isPlural();
 			break;
@@ -315,6 +314,7 @@ void MathStructure::set_nocopy(MathStructure &o, bool merge_precision) {
 		}
 		default: {}
 	}
+	o_prefix = o.prefix();
 	b_protected = o.isProtected();
 	for(size_t i = 0; i < o.size(); i++) {
 		APPEND_REF((&o[i]))
@@ -668,9 +668,7 @@ Prefix *MathStructure::unit_exp_prefix() const {
 	return NULL;
 }
 void MathStructure::setPrefix(Prefix *p) {
-	if(isUnit()) {
-		o_prefix = p;
-	}
+	o_prefix = p;
 }
 bool MathStructure::isPlural() const {
 	return b_plural;
@@ -2915,7 +2913,14 @@ bool MathStructure::replace(const MathStructure &mfrom, const MathStructure &mto
 	if(replace_in_variables && m_type == STRUCT_VARIABLE && o_variable->isKnown()) {
 		if(((KnownVariable*) o_variable)->get().contains(mfrom, !exclude_function_arguments, true, false, true) > 0) {
 			MathStructure m(((KnownVariable*) o_variable)->get());
-			if(m.replace(mfrom, mto, once_only, exclude_function_arguments, true)) {
+			if(!m.isAborted() && m.replace(mfrom, mto, once_only, exclude_function_arguments, true)) {
+				if(!o_variable->isRegistered()) {
+					Variable *v = CALCULATOR->getActiveVariable(o_variable->referenceName());
+					if(v->isKnown() && ((KnownVariable*) v)->get().equals(m, true, true)) {
+						set(v);
+						return true;
+					}
+				}
 				KnownVariable *var = new KnownVariable("", o_variable->referenceName(), m);
 				set(var);
 				var->destroy();

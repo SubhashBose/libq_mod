@@ -178,6 +178,8 @@ Calculator::Calculator() {
 	priv->temperature_calculation = TEMPERATURE_CALCULATION_HYBRID;
 	priv->matlab_matrices = true;
 	priv->persistent_plot = false;
+	priv->concise_uncertainty_input = false;
+	priv->fixed_denominator = 2;
 
 #ifdef HAVE_ICU
 	UErrorCode err = U_ZERO_ERROR;
@@ -187,13 +189,13 @@ Calculator::Calculator() {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 467016L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 467016L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 467016L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 467016L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
 	priv->exchange_rates_url3 = 0;
@@ -436,6 +438,8 @@ Calculator::Calculator(bool ignore_locale) {
 	priv->temperature_calculation = TEMPERATURE_CALCULATION_HYBRID;
 	priv->matlab_matrices = true;
 	priv->persistent_plot = false;
+	priv->concise_uncertainty_input = false;
+	priv->fixed_denominator = 2;
 
 #ifdef HAVE_ICU
 	UErrorCode err = U_ZERO_ERROR;
@@ -445,13 +449,13 @@ Calculator::Calculator(bool ignore_locale) {
 	srand(time(NULL));
 
 	exchange_rates_time[0] = 0;
-	exchange_rates_time[1] = (time_t) 467016L * (time_t) 3600;
+	exchange_rates_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_time[2] = 0;
-	priv->exchange_rates_time2[0] = (time_t) 467016L * (time_t) 3600;
+	priv->exchange_rates_time2[0] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[0] = 0;
-	exchange_rates_check_time[1] = (time_t) 467016L * (time_t) 3600;
+	exchange_rates_check_time[1] = (time_t) 470688L * (time_t) 3600;
 	exchange_rates_check_time[2] = 0;
-	priv->exchange_rates_check_time2[0] = (time_t) 467016L * (time_t) 3600;
+	priv->exchange_rates_check_time2[0] = (time_t) 470688L * (time_t) 3600;
 	b_exchange_rates_warning_enabled = true;
 	b_exchange_rates_used = 0;
 	priv->exchange_rates_url3 = 0;
@@ -1435,6 +1439,14 @@ void Calculator::endTemporaryEnableIntervalArithmetic() {
 bool Calculator::usesMatlabStyleMatrices() const {return priv->matlab_matrices;}
 void Calculator::useMatlabStyleMatrices(bool use_matlab_style_matrices) {priv->matlab_matrices = use_matlab_style_matrices;}
 
+bool Calculator::conciseUncertaintyInputEnabled() const {return priv->concise_uncertainty_input;}
+void Calculator::setConciseUncertaintyInputEnabled(bool enable_concise_uncertainty_input) {priv->concise_uncertainty_input = enable_concise_uncertainty_input;}
+
+long int Calculator::fixedDenominator() const {return priv->fixed_denominator;}
+void Calculator::setFixedDenominator(long int fixed_denominator) {
+	if(fixed_denominator > 1) priv->fixed_denominator = fixed_denominator;
+}
+
 void Calculator::setCustomAngleUnit(Unit *u) {
 	if(u) u->ref();
 	if(priv->custom_angle_unit) priv->custom_angle_unit->unref();
@@ -1880,11 +1892,11 @@ void Calculator::addBuiltinFunctions() {
 }
 void Calculator::addBuiltinUnits() {
 	u_euro = addUnit(new Unit(_("Currency"), "EUR", "euros", "euro", "European Euros", false, true, true));
-	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "27488.51", 1, "", false, true, true));
+	u_btc = addUnit(new AliasUnit(_("Currency"), "BTC", "bitcoins", "bitcoin", "Bitcoins", u_euro, "26127.56", 1, "", false, true, true));
 	u_btc->setApproximate();
 	u_btc->setPrecision(-2);
 	u_btc->setChanged(false);
-	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/2.7350", 1, "", false, true, true));
+	priv->u_byn = addUnit(new AliasUnit(_("Currency"), "BYN", "", "", "Belarusian Ruble", u_euro, "1/2.68918", 1, "", false, true, true));
 	priv->u_byn->setHidden(true);
 	priv->u_byn->setApproximate();
 	priv->u_byn->setPrecision(-2);

@@ -1645,7 +1645,7 @@ bool MathStructure::complexToExponentialForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else {
+	} else if(!isVector()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		marg *= nr_one_i;
 		CALCULATOR->beginTemporaryStopMessages();
@@ -1653,7 +1653,7 @@ bool MathStructure::complexToExponentialForm(const EvaluationOptions &eo) {
 		eo2.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		eo2.parse_options.angle_unit = ANGLE_UNIT_RADIANS;
 		marg.eval(eo2);
-		if(!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) {
+		if((!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) && marg.representsScalar()) {
 			CALCULATOR->endTemporaryStopMessages(true);
 			MathStructure mabs(CALCULATOR->getFunctionById(FUNCTION_ID_ABS), this, NULL);
 			set(CALCULATOR->getVariableById(VARIABLE_ID_E), true);
@@ -1726,13 +1726,13 @@ bool MathStructure::complexToPolarForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else {
+	} else if(!isVector()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		CALCULATOR->beginTemporaryStopMessages();
 		EvaluationOptions eo2 = eo;
 		eo2.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		marg.eval(eo2);
-		if(!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) {
+		if((!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) && marg.representsScalar()) {
 			CALCULATOR->endTemporaryStopMessages(true);
 			MathStructure mabs(CALCULATOR->getFunctionById(FUNCTION_ID_ABS), this, NULL);
 			mabs.eval(eo2);
@@ -1803,13 +1803,13 @@ bool MathStructure::complexToCisForm(const EvaluationOptions &eo) {
 		return true;
 	} else if(representsReal(true)) {
 		return false;
-	} else {
+	} else if(!isVector()) {
 		MathStructure marg(CALCULATOR->getFunctionById(FUNCTION_ID_ARG), this, NULL);
 		CALCULATOR->beginTemporaryStopMessages();
 		EvaluationOptions eo2 = eo;
 		eo2.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		marg.eval(eo2);
-		if(!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) {
+		if((!marg.isFunction() || marg.function()->id() != FUNCTION_ID_ARG) && marg.representsScalar()) {
 			CALCULATOR->endTemporaryStopMessages(true);
 			MathStructure mabs(CALCULATOR->getFunctionById(FUNCTION_ID_ABS), this, NULL);
 			mabs.eval(eo2);
@@ -2147,7 +2147,7 @@ void convert_temperature_units(MathStructure &m, const EvaluationOptions &eo) {
 
 bool warn_ratio_units(MathStructure &m, bool top_level = true) {
 	if(!top_level && m.isUnit() && ((m.unit()->subtype() == SUBTYPE_BASE_UNIT && m.unit()->referenceName() == "Np") || (m.unit()->subtype() == SUBTYPE_ALIAS_UNIT && ((AliasUnit*) m.unit())->baseUnit()->referenceName() == "Np"))) {
-		CALCULATOR->error(true, "Logarithmic ratio units is treated as other units and the result might not be as expected.", NULL);
+		CALCULATOR->error(true, _("Logarithmic ratio units are treated as other units and the result might not be as expected."), NULL);
 		return true;
 	}
 	if(m.isMultiplication() && top_level && m.last().isUnit()) {
@@ -2483,7 +2483,7 @@ MathStructure &MathStructure::eval(const EvaluationOptions &eo) {
 			separate_vector_vars(*this, feo, vars, uncs);
 		}
 		if(eo.calculate_functions) calculate_nondifferentiable_functions(*this, feo, true, true, -1);
-		if(!isNumber() && (((eo.approximation != APPROXIMATION_EXACT && eo.approximation != APPROXIMATION_EXACT_VARIABLES && eo.calculate_variables) && containsInterval(true, true, false, 1, true)) || containsInterval(true, false, false, 1, true) || (eo.sync_units && eo.approximation != APPROXIMATION_EXACT && sync_approximate_units(*this, eo)) || (eo.approximation == APPROXIMATION_EXACT && contains_function_interval(*this, true, true, false, 1, true)))) {
+		if(!isNumber() && (((eo.approximation != APPROXIMATION_EXACT && eo.approximation != APPROXIMATION_EXACT_VARIABLES && eo.calculate_variables) && containsInterval(true, true, false, 1, true)) || containsInterval(true, false, false, 1, true) || (eo.sync_units && eo.approximation != APPROXIMATION_EXACT && sync_approximate_units(*this, eo) && containsInterval(true, true, false, 1, true)) || (eo.approximation == APPROXIMATION_EXACT && contains_function_interval(*this, true, true, false, 1, true)))) {
 
 			// calculate non-differentiable functions (not handled by variance formula) and functions without uncertainties
 			if(eo.calculate_functions) calculate_nondifferentiable_functions(*this, feo, true, true, (eo.approximation != APPROXIMATION_EXACT && eo.approximation != APPROXIMATION_EXACT_VARIABLES && eo.calculate_variables) ? 2 : 1);

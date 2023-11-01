@@ -78,7 +78,9 @@ class Calculator_p {
 		TemperatureCalculationMode temperature_calculation;
 		bool matlab_matrices;
 		bool persistent_plot;
+		bool concise_uncertainty_input;
 		int exchange_rates_url3;
+		long int fixed_denominator;
 };
 
 class CalculateThread : public Thread {
