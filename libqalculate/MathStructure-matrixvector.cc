@@ -1,7 +1,7 @@
 /*
     Qalculate (library)
 
-    Copyright (C) 2003-2007, 2008, 2016-2019  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -124,6 +124,12 @@ bool MathStructure::sortVector(bool ascending) {
 	}
 	v_order = ranked_mstructs;
 	return true;
+}
+void MathStructure::flipVector() {
+	if(SIZE <= 1) return;
+	for(size_t i = 0; i < SIZE / 2; i++) {
+		SWAP_CHILDREN(i, SIZE - i - 1);
+	}
 }
 MathStructure &MathStructure::getRange(int start, int end, MathStructure &mstruct) const {
 	if(!isVector()) {
@@ -835,10 +841,11 @@ MathStructure &MathStructure::cofactor(size_t r, size_t c, MathStructure &mstruc
 	return mstruct;
 }
 
-bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, const EvaluationOptions &eo, bool b_vector) {
+bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, const EvaluationOptions &eo, bool b_vector, size_t depth) {
+	if(!check_recursive_function_depth(depth)) return false;
 	bool b_ret = false;
 	for(size_t i = 0; i < m.size(); i++) {
-		if(calculate_userfunctions(m[i], x_mstruct, eo, b_vector)) {
+		if(calculate_userfunctions(m[i], x_mstruct, eo, b_vector, depth + 1)) {
 			m.childUpdated(i + 1);
 			b_ret = true;
 		}
@@ -847,7 +854,7 @@ bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, c
 		if(!m.contains(x_mstruct, true) && !m.containsFunctionId(FUNCTION_ID_RAND, true, true, true) && !m.containsFunctionId(FUNCTION_ID_RANDN, true, true, true) && !m.containsFunctionId(FUNCTION_ID_RAND_POISSON, true, true, true)) {
 			if(m.calculateFunctions(eo, false)) {
 				b_ret = true;
-				calculate_userfunctions(m, x_mstruct, eo, b_vector);
+				calculate_userfunctions(m, x_mstruct, eo, b_vector, depth + 1);
 			}
 		} else if(m.function()->subtype() == SUBTYPE_USER_FUNCTION && m.function()->condition().empty()) {
 			bool b = true;
@@ -865,7 +872,7 @@ bool calculate_userfunctions(MathStructure &m, const MathStructure &x_mstruct, c
 				}
 			}
 			if(b && m.calculateFunctions(eo, false)) {
-				calculate_userfunctions(m, x_mstruct, eo, false);
+				calculate_userfunctions(m, x_mstruct, eo, false, depth + 1);
 				b_ret = true;
 			}
 		} else if(b_vector && ((m.function()->id() == FUNCTION_ID_DIFFERENTIATE && (m.size() < 3 || m[3].isUndefined())) || (m.function()->id() == FUNCTION_ID_INTEGRATE && (m.size() < 3 || (m[1].isUndefined() && m[2].isUndefined()))))) {
@@ -1276,10 +1283,12 @@ MathStructure MathStructure::generateVector(MathStructure x_mstruct, const MathS
 		CALCULATOR->error(true, _("Too many data points"), NULL);
 		return y_vector;
 	}
+	CALCULATOR->beginTemporaryStopMessages();
 	MathStructure step(max);
 	step.calculateSubtract(min, eo);
 	if(steps != 1) step.calculateDivide(steps - 1, eo);
 	step.eval(eo);
+	CALCULATOR->endTemporaryStopMessages();
 	if(!step.isNumber() || step.number().isNegative()) {
 		CALCULATOR->error(true, _("The selected min and max do not result in a positive, finite number of data points"), NULL);
 		return y_vector;
@@ -1317,10 +1326,19 @@ MathStructure MathStructure::generateVector(MathStructure x_mstruct, const MathS
 		step = step_pre;
 		step.eval(eo);
 		if(min != max) {
+			CALCULATOR->beginTemporaryStopMessages();
 			MathStructure mtest(max);
 			mtest.calculateSubtract(min, eo);
 			if(!step.isZero()) mtest.calculateDivide(step, eo);
 			mtest.eval(eo);
+			if(!step.isZero() && mtest.isNumber() && mtest.number().isNegative()) {
+				step.negate();
+				mtest = max;
+				mtest.calculateSubtract(min, eo);
+				if(!step.isZero()) mtest.calculateDivide(step, eo);
+				mtest.eval(eo);
+			}
+			CALCULATOR->endTemporaryStopMessages();
 			if(step.isZero() || !mtest.isNumber() || mtest.number().isNegative()) {
 				CALCULATOR->error(true, _("The selected min, max and step size do not result in a positive, finite number of data points"), NULL);
 				return y_vector;

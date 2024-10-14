@@ -6,7 +6,7 @@ dnl  ----------------------
 dnl | initialize autotools |---------------------------------------------------
 dnl  ----------------------
 
-AC_INIT([libqalculate],[4.8.1])
+AC_INIT([libqalculate],[5.3.0])
 AC_CONFIG_SRCDIR(libqalculate/Calculator.cc)
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
@@ -69,16 +69,16 @@ AC_DEFINE([HAVE_PTHREADS],1,
 dnl libtool versioning for libqalculate
 
 dnl increment if the interface has additions, changes, removals.
-QALCULATE_CURRENT=42
+QALCULATE_CURRENT=26
 
 dnl increment any time the source changes; set to 
 dnl  0 if you increment CURRENT
-QALCULATE_REVISION=1
+QALCULATE_REVISION=0
 
 dnl increment if any interfaces have been added; set to 0
 dnl  if any interfaces have been removed. removal has 
 dnl  precedence over adding, so set to 0 if both happened.
-QALCULATE_AGE=20
+QALCULATE_AGE=3
 
 AC_SUBST(QALCULATE_CURRENT)
 AC_SUBST(QALCULATE_REVISION)
@@ -107,7 +107,7 @@ AS_IF([test "x$enable_compiled_definitions" = "xyes"], [
 ])
 AM_CONDITIONAL(COMPILED_DEFINITIONS, [test "x$enable_compiled_definitions" = "xyes"])
 
-AC_ARG_ENABLE([insecure], AS_HELP_STRING([--disbale-insecure], [disable insecure functions (command) and variables (uptime)]))
+AC_ARG_ENABLE([insecure], AS_HELP_STRING([--disable-insecure], [disable insecure functions (command) and variables (uptime)]))
 AS_IF([test "x$enable_insecure" = "xno"], [
 	AC_DEFINE([DISABLE_INSECURE], [1], [Disable insecure functions and variables])
 ])

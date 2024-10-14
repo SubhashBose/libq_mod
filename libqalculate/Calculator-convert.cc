@@ -1,7 +1,7 @@
 /*
     Qalculate
 
-    Copyright (C) 2003-2007, 2008, 2016-2019  Hanna Knutsson (hanna.knutsson@protonmail.com)
+    Copyright (C) 2003-2007, 2008, 2016-2024  Hanna Knutsson (hanna.knutsson@protonmail.com)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,9 +25,13 @@
 #include "Number.h"
 
 #include <locale.h>
-#include <unistd.h>
+#ifdef _MSC_VER
+#	include <sys/utime.h>
+#else
+#	include <unistd.h>
+#	include <utime.h>
+#endif
 #include <time.h>
-#include <utime.h>
 #include <sys/types.h>
 
 using std::string;
@@ -416,9 +420,7 @@ void fix_to_struct2(MathStructure &m) {
 		if(m.size() == 1) m.setToChild(1);
 	}
 }
-MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units) {
-	return convert(mstruct, to_unit, eo, always_convert, convert_to_mixed_units, false, NULL);
-}
+
 Unit *find_ounce(const MathStructure &m) {
 	if(m.isUnit() && m.unit()->referenceName() == "oz") return m.unit();
 	for(size_t i = 0; i < m.size(); i++) {
@@ -472,7 +474,7 @@ bool contains_angle_ratio(const MathStructure &m) {
 	return num && den;
 }
 
-MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct = NULL) {
+MathStructure get_units_for_parsed_expression(const MathStructure *parsed_struct, Unit *to_unit, const EvaluationOptions &eo, const MathStructure *mstruct) {
 	CompositeUnit *cu = NULL;
 	if(to_unit->subtype() == SUBTYPE_COMPOSITE_UNIT) cu = (CompositeUnit*) to_unit;
 	if(cu && cu->countUnits() == 0) return m_zero;
@@ -566,6 +568,18 @@ void test_convert(MathStructure &mstruct_new, Unit *to_unit, long int &n, bool b
 	}
 	eo2.auto_post_conversion = pc;
 }
+bool angle_convert(MathStructure &m, Unit *u, const EvaluationOptions &eo) {
+	if(m.isFunction() && ((m.function()->getArgumentDefinition(1) && m.function()->getArgumentDefinition(1)->type() == ARGUMENT_TYPE_ANGLE) || m.function()->id() == FUNCTION_ID_CIS) && m.size() >= 1) {
+		m[0] = CALCULATOR->convert(m[0], u, eo);
+		return true;
+	}
+	bool b = false;
+	for(size_t i = 0; i < m.size(); i++) {
+		angle_convert(m[i], u, eo);
+		b = true;
+	}
+	return b;
+}
 
 MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, const EvaluationOptions &eo, bool always_convert, bool convert_to_mixed_units, bool transform_orig, MathStructure *parsed_struct) {
 	CompositeUnit *cu = NULL;
@@ -650,6 +664,7 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 				eo2.sync_units = false;
 				eo2.keep_prefixes = true;
 				mstruct_new.eval(eo2);
+				if(b_angle) angle_convert(mstruct_new, to_unit, eo);
 				cleanMessages(mstruct, n_messages + 1);
 			}
 			return mstruct_new;
@@ -832,6 +847,8 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 				}
 			}
 			b = true;
+		} else if(b_angle && angle_convert(mstruct_new, to_unit, eo)) {
+			return mstruct_new;
 		} else if(to_unit->baseUnit() == getRadUnit() && mstruct_new.contains(to_unit, true) < 1) {
 			mstruct_new.multiply(getRadUnit(), true);
 			if(to_unit->baseExponent() != 1) mstruct_new.last().raise(to_unit->baseExponent());
@@ -1000,7 +1017,10 @@ MathStructure Calculator::convert(const MathStructure &mstruct, Unit *to_unit, c
 			}
 			eo2.sync_units = false;
 			eo2.keep_prefixes = true;
-			if(b_eval) mstruct_new.eval(eo2);
+			if(b_eval) {
+				mstruct_new.eval(eo2);
+				if(b_angle) angle_convert(mstruct_new, to_unit, eo);
+			}
 
 			cleanMessages(mstruct, n_messages + 1);
 
@@ -1907,6 +1927,18 @@ void set_null_prefixes(MathStructure &m) {
 	}
 }
 
+Unit *get_first_unit(const MathStructure &m) {
+	if(m.isUnit()) return m.unit();
+	if(m.isPower() && m[0].isUnit()) return m[0].unit();
+	if(m.isMultiplication()) {
+		for(size_t i = 0; i < m.size(); i++) {
+			Unit *u = get_first_unit(m[i]);
+			if(u) return u;
+		}
+	}
+	return NULL;
+}
+
 MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, string str2, const EvaluationOptions &eo, MathStructure *to_struct, bool transform_orig, MathStructure *parsed_struct) {
 	if(to_struct) to_struct->setUndefined();
 	remove_blank_ends(str2);
@@ -1956,6 +1988,25 @@ MathStructure Calculator::convert(const MathStructure &mstruct_to_convert, strin
 			else if(v->referenceName() == "electron_mass") u = CALCULATOR->getActiveUnit("electron_unit");
 		}
 		if(u) v = NULL;
+	}
+	if(!u && !v && unitNameIsValid(str2)) {
+		Prefix *p = getPrefix(str2);
+		if(p) {
+			u = get_first_unit(mstruct_to_convert);
+			if(u) {
+				str2 += u->referenceName();
+				u = NULL;
+			} else {
+				mstruct = mstruct_to_convert;
+				mstruct.divide(p->value());
+				mstruct.eval(eo);
+				KnownVariable *v = new KnownVariable("", str2, p->value());
+				mstruct.multiply(v);
+				v->destroy();
+				current_stage = MESSAGE_STAGE_UNSET;
+				return mstruct;
+			}
+		}
 	}
 	if(u) {
 		if(to_struct) to_struct->set(u);

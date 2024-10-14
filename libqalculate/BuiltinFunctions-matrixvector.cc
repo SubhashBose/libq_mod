@@ -124,6 +124,27 @@ int MergeVectorsFunction::calculate(MathStructure &mstruct, const MathStructure 
 	}
 	return 1;
 }
+FlipFunction::FlipFunction() : MathFunction("flip", 1, 2) {
+	setArgumentDefinition(1, new MatrixArgument());
+	IntegerArgument *iarg = new IntegerArgument();
+	iarg->setMin(&nr_zero);
+	iarg->setMax(&nr_two);
+	setArgumentDefinition(2, iarg);
+	setDefaultValue(2, "0");
+}
+int FlipFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions&) {
+	mstruct = vargs[0];
+	int dimension = vargs[1].number().intValue();
+	if(dimension == 0 || dimension == 1) {
+		mstruct.flipVector();
+	}
+	if(dimension == 0 || dimension == 2) {
+		for(size_t i = 0; i < mstruct.size(); i++) {
+			mstruct[i].flipVector();
+		}
+	}
+	return 1;
+}
 VertCatFunction::VertCatFunction() : MathFunction("vertcat", 1, -1) {
 	setArgumentDefinition(1, new MatrixArgument(""));
 	setArgumentDefinition(2, new MatrixArgument(""));
@@ -1214,6 +1235,26 @@ int GenerateVectorFunction::calculate(MathStructure &mstruct, const MathStructur
 		}
 		mstruct = vargs[0].generateVector(vargs[4], vargs[1], vargs[2], steps, NULL, eo);
 	}
+	if(CALCULATOR->aborted() || mstruct.size() == 0) return 0;
+	return 1;
+}
+ColonFunction::ColonFunction() : MathFunction("colon", 2, 3) {
+	Argument *arg = new Argument();
+	arg->setHandleVector(true);
+	setArgumentDefinition(1, arg);
+	arg = new Argument();
+	arg->setHandleVector(true);
+	setArgumentDefinition(2, arg);
+	arg = new Argument();
+	arg->setHandleVector(true);
+	setArgumentDefinition(3, arg);
+	setDefaultValue(3, "undefined");
+}
+int ColonFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
+	if(CALCULATOR->aborted()) return 0;
+	mstruct.set("x", true);
+	if(vargs[2].isUndefined()) mstruct = mstruct.generateVector(mstruct, vargs[0], vargs[1], m_one, NULL, eo);
+	else mstruct = mstruct.generateVector(mstruct, vargs[0], vargs[2], vargs[1], NULL, eo);
 	if(CALCULATOR->aborted() || mstruct.size() == 0) return 0;
 	return 1;
 }

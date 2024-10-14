@@ -18,13 +18,16 @@
 #include "MathStructure-support.h"
 
 #include <locale.h>
-#include <unistd.h>
+#ifdef _MSC_VER
+#	include <sys/utime.h>
+#else
+#	include <unistd.h>
+#	include <utime.h>
+#endif
 #include <time.h>
-#include <utime.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #include <vector>
 
 using std::string;
@@ -265,16 +268,14 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 	string commandline_extra;
 	string title;
 
-	if(!param) {
-		PlotParameters pp;
-		param = &pp;
-	}
+	PlotParameters pp;
+	if(!param) param = &pp;
 
 	vector<MathStructure> yim_vectors;
 	for(size_t i = 0; i < y_vectors.size(); i++) {
 		yim_vectors.push_back(m_undefined);
 		if(!y_vectors[i].isUndefined()) {
-			for(size_t i2 = 0; i2 < y_vectors[i].size() - 1; i2++) {
+			for(size_t i2 = 0; i2 + 1 < y_vectors[i].size(); i2++) {
 				if(y_vectors[i][i2].isNumber() && y_vectors[i][i2].number().hasImaginaryPart()) {
 					if(y_vectors[i][i2 + 1].isNumber() && y_vectors[i][i2 + 1].number().hasImaginaryPart()) {
 						yim_vectors[i].clearVector();
@@ -463,8 +464,13 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 		}
 	}
 	if(param->grid) {
-		if(b_polar) plot += "set grid polar\n";
-		else plot += "set grid\n";
+		if(b_polar) plot += "set grid polar";
+		else plot += "set grid";
+		if(param->grid > 1) {
+			plot += " lw ";
+			plot += i2s(param->grid);
+		}
+		plot += "\n";
 	}
 	if(!param->auto_y_min || !param->auto_y_max) {
 		plot += "set yrange [";
@@ -615,6 +621,8 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 			ComparisonResult ct1 = COMPARISON_RESULT_EQUAL, ct2 = COMPARISON_RESULT_EQUAL;
 			size_t last_index = string::npos, last_index2 = string::npos;
 			bool check_continuous = pdps[serie]->test_continuous && (pdps[serie]->style == PLOT_STYLE_LINES || pdps[serie]->style == PLOT_STYLE_POINTS_LINES);
+			size_t discontinuous_count = 0, point_count = 0;
+			bool discontinuous_start = false, discontinuous_end = false;
 			bool prev_failed = false;
 			const MathStructure *yprev = NULL;
 			for(size_t i = 1; (i_pre % 2 == 0 && i <= y_vectors[serie].countChildren()) || (i_pre % 2 == 1 && i <= yim_vectors[serie].countChildren()); i++) {
@@ -668,6 +676,7 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 						if(b_imagzero_x) plot_data += x_vectors[serie].getChild(i)->number().realPart().print(po);
 						else plot_data += x_vectors[serie].getChild(i)->print(po);
 						plot_data += " ";
+						point_count++;
 					}
 				}
 				if(!invalid_nr) {
@@ -677,7 +686,21 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 						if((ct == COMPARISON_RESULT_GREATER || ct == COMPARISON_RESULT_LESS) && (ct1 == COMPARISON_RESULT_GREATER || ct1 == COMPARISON_RESULT_LESS) && (ct2 == COMPARISON_RESULT_GREATER || ct2 == COMPARISON_RESULT_LESS) && ct1 != ct2 && ct != ct2) {
 							if(last_index2 != string::npos) {
 								plot_data.insert(last_index2 + 1, "  \n");
+								discontinuous_count++;
 								last_index += 3;
+								if(i == 4) {
+									discontinuous_start = true;
+								} else if(i == 5 && discontinuous_start && plot_data.find("\n") != plot_data.find("\n  \n")) {
+									size_t i_firstrow = plot_data.find("\n");
+									plot_data.insert(i_firstrow, "\n  ");
+									last_index += 3;
+								}
+								if((i_pre % 2 == 0 && i == y_vectors[serie].countChildren() - 1) || (i_pre % 2 == 1 && i == yim_vectors[serie].countChildren() - 1)) {
+									discontinuous_end = true;
+								} else if(discontinuous_end && ((i_pre % 2 == 0 && i == y_vectors[serie].countChildren()) || (i_pre % 2 == 1 && i == yim_vectors[serie].countChildren()))) {
+									size_t i_lastrow = plot_data.rfind("\n");
+									plot_data.insert(i_lastrow, "\n  ");
+								}
 							}
 						}
 					}
@@ -688,6 +711,7 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 				} else if(!prev_failed) {
 					ct = COMPARISON_RESULT_UNKNOWN;
 					plot_data += "  \n";
+					discontinuous_count++;
 					prev_failed = true;
 				}
 				if(yprev == &m) {
@@ -713,6 +737,10 @@ bool Calculator::plotVectors(PlotParameters *param, const vector<MathStructure> 
 				}
 			}
 			if(msecs > 0) stopControl();
+			if(check_continuous && pdps[serie]->style == PLOT_STYLE_LINES && discontinuous_count > point_count / 2) {
+				if((i_pre % 2 == 0 && y_vectors[serie].countChildren() > 100) || (i_pre % 2 == 1 && yim_vectors[serie].countChildren() > 100)) gsub(" with lines", " with dots", plot);
+				else gsub(" with lines", " with points", plot);
+			}
 #ifdef HAVE_GNUPLOT_CALL
 			fputs(plot_data.c_str(), fdata);
 			fflush(fdata);
