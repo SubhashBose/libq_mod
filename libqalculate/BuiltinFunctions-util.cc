@@ -1005,7 +1005,11 @@ int CommandFunction::calculate(MathStructure &mstruct, const MathStructure &varg
 		output += buffer;
 	}
 
+#ifdef _WIN32
+	if(_pclose(pipe) > 0 && output.empty()) {
+#else
 	if(pclose(pipe) > 0 && output.empty()) {
+#endif
 		CALCULATOR->error(true, _("Failed to run external command (%s)."), commandline.c_str(), NULL);
 		return 0;
 	}
@@ -1054,9 +1058,9 @@ int CommandFunction::calculate(MathStructure &mstruct, const MathStructure &varg
 #define LIST_PLOT_OPTION_LAST(x) LIST_PLOT_OPTION_1(x)
 #define LIST_PLOT_OPTION_WV(x) LIST_PLOT_OPTION_1(x)
 #define LIST_PLOT_OPTION_ALT_WV(x, y) LIST_PLOT_OPTION_2(x, y)
-#define LIST_PLOT_VALUE(y, x) if(strcmp(y, x)) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ", ";
-#define LIST_PLOT_VALUE_FIRST(y, x) str += " ("; if(strcmp(y, x)) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ", ";
-#define LIST_PLOT_VALUE_LAST(y, x) if(strcmp(y, x)) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ")\n";
+#define LIST_PLOT_VALUE(y, x) if(strcmp(x, _c(y, x))) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ", ";
+#define LIST_PLOT_VALUE_FIRST(y, x) str += " ("; if(strcmp(x, _c(y, x))) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ", ";
+#define LIST_PLOT_VALUE_LAST(y, x) if(strcmp(x, _c(y, x))) {str += _c(y, x); str += PLOT_OPTION_LOCALE_SEPARATOR;} str += x; str += ")\n";
 #define LIST_PLOT_OPTION_ALT_VALUES(x, y, z) LIST_PLOT_OPTION_2(x, y) str += " ("; str += z; str += ")"; str += PLOT_OPTION_SEPARATOR;
 #define LIST_PLOT_OPTION_VALUES(x, y) LIST_PLOT_OPTION_1(x) str += " ("; str += y; str += ")"; str += PLOT_OPTION_SEPARATOR;
 
@@ -1096,6 +1100,14 @@ PlotFunction::PlotFunction() : MathFunction("plot", 1, -1) {
 	LIST_PLOT_OPTION("xlabel");
 	LIST_PLOT_OPTION_LAST("ylabel");
 	setDescription(str);
+}
+
+int PlotFunction::parse(MathStructure &mstruct, const std::string &eq, const ParseOptions &po) {
+	int ret = MathFunction::parse(mstruct, eq, po);
+	if(mstruct.size() > 0 && mstruct[0].isComparison() && mstruct[0].comparisonType() == COMPARISON_EQUALS && mstruct[0][0].isVariable() && mstruct[0][0].variable() == CALCULATOR->getVariableById(VARIABLE_ID_Y) && mstruct[0][1].contains(CALCULATOR->getVariableById(VARIABLE_ID_X))) {
+		mstruct[0].setToChild(2, true);
+	}
+	return ret;
 }
 
 int PlotFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, const EvaluationOptions &eo) {
@@ -1302,7 +1314,9 @@ int PlotFunction::calculate(MathStructure &mstruct, const MathStructure &vargs, 
 		eo2.expand = eo.expand;
 	}
 	if(mstruct.isFunction() && (mstruct.function()->id() == FUNCTION_ID_HORZCAT || mstruct.function()->id() == FUNCTION_ID_VERTCAT)) mstruct.setType(STRUCT_VECTOR);
-	if(mstruct.isMatrix() && mstruct.columns() == 1 && mstruct.rows() > 1) mstruct.transposeMatrix();
+	if(mstruct.isMatrix() && mstruct.columns() == 1 && mstruct.rows() > 1) {
+		if(!mstruct.transposeMatrix()) return 0;
+	}
 	CALCULATOR->endTemporaryStopIntervalArithmetic();
 	vector<MathStructure> x_vectors, y_vectors;
 	vector<PlotDataParameters*> dpds;

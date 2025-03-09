@@ -725,6 +725,37 @@ int test_frac(const MathStructure &m, bool test_combined = true, int limit = 100
 	return 1;
 }
 
+size_t unformatted_length_q(const string &str, bool format, int tagtype) {
+	if(format && tagtype == TAG_TYPE_HTML) {
+		size_t l = 0;
+		bool intag = false;
+		for(size_t i = 0; i < str.length(); i++) {
+			if(intag) {
+				if(str[i] == '>') intag = false;
+			} else if(str[i] == '<') {
+				intag = true;
+			} else if((signed char) str[i] > 0 || (unsigned char) str[i] >= 0xC0) {
+				l++;
+			}
+		}
+		return l;
+	} else if(format && tagtype == TAG_TYPE_TERMINAL) {
+		size_t l = 0;
+		bool intag = false;
+		for(size_t i = 0; i < str.length(); i++) {
+			if(intag) {
+				if(str[i] == 'm') intag = false;
+			} else if(str[i] == '\033') {
+				intag = true;
+			} else if((signed char) str[i] > 0 || (unsigned char) str[i] >= 0xC0) {
+				l++;
+			}
+		}
+		return l;
+	}
+	return unicode_length(str);
+}
+
 void print_m(PrintOptions &po, const EvaluationOptions &evalops, string &str, vector<string> &results_v, MathStructure &m, const MathStructure *mresult, const string &original_expression, const MathStructure *mparse, int dfrac, int dappr, bool cplx_angle, bool only_cmp = false, bool format = false, int colorize = 0, int tagtype = TAG_TYPE_HTML, int max_length = -1) {
 	bool b_exact = !mresult->isApproximate();
 	// avoid multiple results with inequalities
@@ -845,7 +876,7 @@ void print_m(PrintOptions &po, const EvaluationOptions &evalops, string &str, ve
 			}
 			if(ipos != string::npos) {
 				for(size_t i = results_v.size(); i > 0; i--) {
-					if((max_length < 0 || (unicode_length(str) + unicode_length(results_v[i - 1]) + 3 <= (size_t) max_length)) && results_v[i - 1] != str.substr(ipos2)) {
+					if((max_length < 0 || (unformatted_length_q(str, format, tagtype) + unformatted_length_q(results_v[i - 1], format, tagtype) + 3 <= (size_t) max_length)) && results_v[i - 1] != str.substr(ipos2)) {
 						str.insert(ipos, results_v[i - 1]);
 						str.insert(ipos, " = ");
 						ipos2 += 3;
@@ -1122,7 +1153,7 @@ bool test_simplified2(const MathStructure &m1, const MathStructure &m2) {
 	return true;
 }
 bool test_simplified(const MathStructure &m, bool top = true) {
-	if(m.isFunction() || (m.isVariable() && m.variable()->isKnown()) || (m.isUnit() && (m.unit()->hasApproximateRelationToBase() || (m.unit()->isCurrency() && m.unit() != CALCULATOR->getLocalCurrency())))) return false;
+	if(m.isFunction() || (m.isVariable() && m.variable()->isKnown()) || (m.isUnit() && (m.unit()->hasApproximateRelationToBase() || (m.unit()->isCurrency() && m.unit() != CALCULATOR->getLocalCurrency()))) || (m.isComparison() && (m[0].size() > 0 || (m[0].isVariable() && m[0].variable()->isKnown()) || m[0].isFunction()))) return false;
 	for(size_t i = 0; i < m.size(); i++) {
 		if(!test_simplified(m[i], false)) return false;
 	}
@@ -1303,6 +1334,7 @@ bool comparison_compare(const MathStructure &m1, MathStructure &m2) {
 		return false;
 	} else {
 		if(m1.type() == m2.type() && m1.size() == m2.size()) {
+			if(m1.isVariable()) return m1.variable()->referenceName() == m2.variable()->referenceName();
 			if(m1.size() == 0) return m1.equals(m2, true);
 			if(m1.type() == STRUCT_COMPARISON) {
 				if(m1.comparisonType() != m2.comparisonType()) return false;
@@ -1865,10 +1897,12 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 				printops.use_prefixes_for_currencies = true;
 				printops.use_prefixes_for_all_units = true;
 				printops.use_unit_prefixes = true;
+			// base units
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "base", _c("units", "base"))) {
 				evalops.parse_options.units_enabled = true;
 				evalops.auto_post_conversion = POST_CONVERSION_BASE;
 				str_conv = "";
+			// number base #
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str1, "base", _("base"))) {
 				if(to_str2 == "b26" || to_str2 == "B26") printops.base = BASE_BIJECTIVE_26;
 				else if(equalsIgnoreCase(to_str2, "bcd")) printops.base = BASE_BINARY_DECIMAL;
@@ -1950,7 +1984,7 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 	}
 
 	// check for factor or expand instruction at front a expression
-	size_t i = str.find_first_of(SPACES LEFT_PARENTHESIS);
+	size_t i = str.find_first_of(SPACES);
 	if(i != string::npos) {
 		to_str = str.substr(0, i);
 		if(to_str == "factor" || EQUALS_IGNORECASE_AND_LOCAL(to_str, "factorize", _("factorize"))) {
@@ -1979,37 +2013,8 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 	}
 
 	// Always perform conversion to optimal (SI) unit when the expression is a number multiplied by a unit and input equals output
-	if(!had_to_expression && ((evalops.approximation == APPROXIMATION_EXACT && evalops.auto_post_conversion != POST_CONVERSION_NONE) || evalops.auto_post_conversion == POST_CONVERSION_OPTIMAL) && ((parsed_struct.isMultiplication() && parsed_struct.size() == 2 && parsed_struct[0].isNumber() && parsed_struct[1].isUnit_exp() && parsed_struct.equals(mstruct)) || (parsed_struct.isNegate() && parsed_struct[0].isMultiplication() && parsed_struct[0].size() == 2 && parsed_struct[0][0].isNumber() && parsed_struct[0][1].isUnit_exp() && mstruct.isMultiplication() && mstruct.size() == 2 && mstruct[1] == parsed_struct[0][1] && mstruct[0].isNumber() && parsed_struct[0][0].number() == -mstruct[0].number()) || (parsed_struct.isUnit_exp() && parsed_struct.equals(mstruct)))) {
-		Unit *u = NULL;
-		MathStructure *munit = NULL;
-		if(mstruct.isMultiplication()) munit = &mstruct[1];
-		else munit = &mstruct;
-		if(munit->isUnit()) u = munit->unit();
-		else u = (*munit)[0].unit();
-		if(u && u->isCurrency()) {
-			if(evalops.local_currency_conversion && getLocalCurrency() && u != getLocalCurrency()) {
-				if(evalops.approximation == APPROXIMATION_EXACT) evalops.approximation = APPROXIMATION_TRY_EXACT;
-				mstruct.set(convertToOptimalUnit(mstruct, evalops, true));
-			}
-		} else if(u && u->subtype() != SUBTYPE_BASE_UNIT && !u->isSIUnit()) {
-			MathStructure mbak(mstruct);
-			if(evalops.auto_post_conversion == POST_CONVERSION_OPTIMAL) {
-				if(munit->isUnit() && u->referenceName() == "oF") {
-					u = getActiveUnit("oC");
-					if(u) mstruct.set(convert(mstruct, u, evalops, true, false));
-				} else if(munit->isUnit() && u->referenceName() == "oC") {
-					u = getActiveUnit("oF");
-					if(u) mstruct.set(convert(mstruct, u, evalops, true, false));
-				} else {
-					mstruct.set(convertToOptimalUnit(mstruct, evalops, true));
-				}
-			}
-			if(evalops.approximation == APPROXIMATION_EXACT && (evalops.auto_post_conversion != POST_CONVERSION_OPTIMAL || mstruct.equals(mbak))) {
-				evalops.approximation = APPROXIMATION_TRY_EXACT;
-				if(evalops.auto_post_conversion == POST_CONVERSION_BASE) mstruct.set(convertToBaseUnits(mstruct, evalops));
-				else mstruct.set(convertToOptimalUnit(mstruct, evalops, true));
-			}
-		}
+	if(!had_to_expression && ((evalops.approximation == APPROXIMATION_EXACT && evalops.auto_post_conversion != POST_CONVERSION_NONE) || evalops.auto_post_conversion == POST_CONVERSION_OPTIMAL)) {
+		convert_unchanged_quantity_with_unit(parsed_struct, mstruct, evalops);
 	}
 
 	MathStructure mstruct_exact;
@@ -2140,8 +2145,11 @@ string Calculator::calculateAndPrint(string str, int msecs, const EvaluationOpti
 			str = result; result = "";
 			size_t equals_length = 3;
 			if(!printops.use_unicode_signs && (mstruct.isApproximate() || *printops.is_approximate)) equals_length += 1 + strlen(_("approx."));
+			size_t l = 0;
+			if(max_length > 0) l += unformatted_length_q(str, format, tagtype);
 			for(size_t i = 0; i < alt_results.size();) {
-				if(max_length > 0 && unicode_length(str) + unicode_length(result) + unicode_length(alt_results[i]) + equals_length > (size_t) max_length) {
+				if(max_length > 0) l += unformatted_length_q(alt_results[i], format, tagtype) + equals_length;
+				if((max_length > 0 && l > (size_t) max_length) || alt_results[i] == timedOutString()) {
 					alt_results.erase(alt_results.begin() + i);
 				} else {
 					if(i > 0) result += " = ";
@@ -2950,6 +2958,10 @@ bool calculate_ans(MathStructure &mstruct, const EvaluationOptions &eo) {
 	return ret;
 }
 bool handle_where_expression(MathStructure &m, MathStructure &mstruct, const EvaluationOptions &eo, vector<Variable*>& vars, bool empty_func, bool do_eval = true) {
+	if(m.isVariable() && m.variable()->isKnown()) {
+		m.set(((KnownVariable*) m.variable())->get());
+		fix_intervals(m, eo, NULL, PRECISION);
+	}
 	if(m.isComparison()) {
 		if(m.comparisonType() == COMPARISON_EQUALS) {
 			// x=y
@@ -3154,7 +3166,7 @@ void Calculator::parseExpressionAndWhere(MathStructure *mstruct, MathStructure *
 					if(b_equals) svalue.erase(0, 1);
 					remove_blank_ends(svalue);
 					Variable *v = NULL;
-					if(wheres[i2][index] == '=')	{
+					if(wheres[i2][index] == '=') {
 						v = new KnownVariable("\x14", sname, svalue);
 					} else {
 						wheres[i2] = wheres[i2].substr(index, wheres[i2].length() - 1);
@@ -3193,6 +3205,9 @@ void Calculator::parseExpressionAndWhere(MathStructure *mstruct, MathStructure *
 						where_vars.push_back(v);
 					}
 				}
+			} else {
+				where_vars.push_back(NULL);
+				repeat.push_back(false);
 			}
 		}
 	}
@@ -3557,6 +3572,9 @@ MathStructure Calculator::calculate(string str, const EvaluationOptions &eo, Mat
 						where_vars.push_back(v);
 					}
 				}
+			} else if(index == string::npos) {
+				if(!str_where.empty()) str_where += LOGICAL_AND;
+				str_where += wheres[i2];
 			}
 		}
 	}
@@ -3686,6 +3704,19 @@ MathStructure Calculator::calculate(string str, const EvaluationOptions &eo, Mat
 			if(provided_to) {
 				mstruct.set(convert(mstruct, str2, eo, to_struct, false, parsed_struct));
 			} else {
+				if(parsed_struct && !b_units && str.length() > 2) {
+					size_t i = str.rfind(":");
+					if(i != string::npos && i > 0) {
+						Unit *u = getActiveUnit(str2);
+						if(u && u->baseUnit()->referenceName() == "s" && parsed_struct->containsType(STRUCT_UNIT, false, true, true) == 0) {
+							Unit *hour = getActiveUnit(str.rfind(":", i - 1) != string::npos ? "h" : "min");
+							if(hour) {
+								parsed_struct->multiply(hour);
+								mstruct.multiply(hour);
+							}
+						}
+					}
+				}
 				string str2b;
 				while(true) {
 					separateToExpression(str2, str2b, eo, true);

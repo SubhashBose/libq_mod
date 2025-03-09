@@ -1,3 +1,138 @@
+2025-02-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Convert turn left over after unit conversion to radians (e.g. "10000Nm*250*rpm to W")
+
+2025-02-17 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Split function description into multiple text blocks, at newline, in help/info output in qalc in order to avoid blank lines when output does not fit terminal screen
+
+2025-02-13 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not convert to inactive unit
+	* Fix calculate as you type with RPN syntax (update when last character is an operator)
+	* Support calculate as you type with RPN stack enabled
+	* Fix "where" operator using a saved equation (the "where" expression is a variable containing an equality or inequality)
+	* Add Ctrl+I shortcut for input of the previous result, either with text of value, or as temporary variable (replaced in history on exit) for approximate or long values
+
+2025-02-01 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Return x=a*e^(i*r) (with r instead of n), with a warning informing the user that r represents any real number, for abs(x)=a
+
+2025-01-31 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show value twice, if not translated, in description of plot function
+
+2025-01-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix solve() function with replace() function as first argument (fixes solve2() function)
+
+2025-01-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Do not show couldn't write preferences warning if file is a symlink
+
+2025-01-08 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Avoid recalculation of old calculate as you type expression when expression is empty, or calculation of empty expression before any calculation has occured, and calculation or parsing settings have been modified
+	* Add description to ans variable
+
+2025-01-03 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix rounding in 1/# conversion to integer (e.g. "1/2 to 0.99")
+
+2025-01-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Always use four digits for year in date (e.g. "0064-07-18" instead of "64-07-18")
+	* Support input of date using dd-mm-yyyy format
+
+2024-12-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix solving of x^4-4x^3+10x^2-12x+1=0, and similar, in exact mode
+	* Use hours or minutes as default unit for conversion to time unit of expression with time format but no units (e.g. "0:00:12 to s")
+
+2024-12-24 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix dual/auto approximation when unable to find exact solution to equation
+	* Fix unability to find approximate solutions to some high degree equations (e.g. "x⁴ − 4x³ + 10x² − 12x = −1")
+
+2024-12-12 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix terminal columns and rows when piping/redirecting input (call rl_initialize() even if readline() is used)
+
+2024-12-09 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add factor() function (returns integer or polynomial factors in a vector)
+	* Fix automatic variable detection in select()
+
+2024-12-08 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* a(i) and a[i] syntax (the latter with restrictions for a) for element in vector
+	* Set ans variable to solution(s) of equation (as if solve() were used)
+
+2024-12-04 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix compilation without readline
+
+2024-11-27 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix ans variables with calculate as you type activated
+
+2024-11-25 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add plot() function example, and support expression in y=f(x) format
+
+2024-11-20 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix test of equation solution in some cases (fixes "sqrt(x-1/x)+sqrt(1-1/x)-x=0" when approximation is not exact)
+	* Fix current value for "help set approximation" when approximation is exact but auto/dual approximation is not reset (after "exact" command)
+
+2024-11-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Option to specify number of displayed significant digits, instead of using precision (if PrintOptions::max_decimals < -1, digits = -max_decimals)
+
+2024-11-15 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve decision to automatically convert unchanged quantity with unit
+	* Fix segfault with very large integer raised by very large integer (integer length multiplied by exponent overflows long long int), e.g. "fs^EiK"
+	* Fix wrong output of converted unit with non-numerical exponent in some cases (e.g. ft^x converted to m without expansion)
+	* Improve calculation of formatted string length (for filtering of multiple results in Calculator::calculateAndPrint())
+	* Remove "timed out" alternative results in Calculator::calculateAndPrint()
+	* Place "approx." on same line as value (instead of as equals sign) in qalc
+	* Display "aborted" for long aborted result in qalc
+
+2024-11-11 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix case conversion of µ to M and similar (compare initial text string when converted back to lower case)
+
+2024-11-06 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add multilimit() function
+
+2024-11-06 Stefan Gerlach <stefan.gerlach@uni-konstanz.de>
+
+	* Fix issues building with MSVC
+
+2024-11-02 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix spacing after implicit mulitplication interpretation question in qalc
+	* Fix formatting when commands/expression is read from file before interactive mode
+
+2024-10-27 Marko Zajc <marko@zajc.tel>
+
+	* Add triple() function
+
+2024-10-19 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Fix clear using Ctrl+L when input line is not empty
+	* Improved detection of charsets other than UTF-8
+
+2024-10-18 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Add calculate as you type (disabled by default) to qalc
+
+2024-10-14 Hanna Knutsson <hanna.knutsson@protonmail.com>
+
+	* Improve ability to abort matrix functions (e.g. identity() with large argument)
+
 2024-10-07 Hanna Knutsson <hanna.knutsson@protonmail.com>
 
 	* Do not show warning for logarithmic ratio unit, with quantity, as function argument

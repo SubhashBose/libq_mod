@@ -6972,15 +6972,23 @@ bool MathStructure::calculateFunctions(const EvaluationOptions &eo, bool recursi
 				last_i = i;
 				if(i > 0 && arg->type() == ARGUMENT_TYPE_SYMBOLIC && (CHILD(i).isZero() || CHILD(i).isUndefined())) {
 					// argument type is symbol and value is zero or undefined, search the first argument/child for symbols
-					CHILD(i).set(CHILD(0).find_x_var(), true);
-					if(CHILD(i).isUndefined() && CHILD(0).isVariable() && CHILD(0).variable()->isKnown()) CHILD(i).set(((KnownVariable*) CHILD(0).variable())->get().find_x_var(), true);
+					for(size_t i2 = 0; i2 < i; i2++) {
+						if(o_function->getArgumentDefinition(i2 + 1) && o_function->getArgumentDefinition(i2 + 1)->type() != ARGUMENT_TYPE_FREE) continue;
+						if(CHILD(i2).isVariable() && CHILD(i2).variable()->isKnown()) CHILD(i).set(((KnownVariable*) CHILD(i2).variable())->get().find_x_var(), true);
+						else CHILD(i).set(CHILD(i2).find_x_var(), true);
+						break;
+					}
 					if(CHILD(i).isUndefined()) {
 						// no symbol found: calculate the argument/child and try again
-						CALCULATOR->beginTemporaryStopMessages();
-						MathStructure mtest(CHILD(0));
-						mtest.eval(eo);
-						CHILD(i).set(mtest.find_x_var(), true);
-						CALCULATOR->endTemporaryStopMessages();
+						for(size_t i2 = 0; i2 < i; i2++) {
+							if(o_function->getArgumentDefinition(i2 + 1) && o_function->getArgumentDefinition(i2 + 1)->type() != ARGUMENT_TYPE_FREE) continue;
+							MathStructure mtest(CHILD(i2));
+							CALCULATOR->beginTemporaryStopMessages();
+							mtest.eval(eo);
+							CALCULATOR->endTemporaryStopMessages();
+							CHILD(i).set(mtest.find_x_var(), true);
+							break;
+						}
 					}
 					if(CHILD(i).isUndefined()) {
 						CALCULATOR->error(false, _("No unknown variable/symbol was found."), NULL);
@@ -7003,7 +7011,7 @@ bool MathStructure::calculateFunctions(const EvaluationOptions &eo, bool recursi
 					}
 				} else if(arg->handlesVector() && (arg->type() != ARGUMENT_TYPE_VECTOR || CHILD(i).isMatrix())) {
 					if(arg->type() == ARGUMENT_TYPE_VECTOR) {
-						CHILD(i).transposeMatrix();
+						if(!CHILD(i).transposeMatrix()) return false;
 					} else if((arg->tests() || (o_function->subtype() == SUBTYPE_USER_FUNCTION && CHILD(i).containsType(STRUCT_VECTOR, false, true, true) > 0)) && !CHILD(i).isVector() && !CHILD(i).representsScalar()) {
 						CHILD(i).eval(eo);
 					}

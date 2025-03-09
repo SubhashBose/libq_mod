@@ -199,7 +199,7 @@ bool Calculator::loadLocalDefinitions() {
 	WIN32_FIND_DATA FindFileData;
 	if((hFind = FindFirstFile(buildPath(homedir, "*").c_str(), &FindFileData)) != INVALID_HANDLE_VALUE) {
 		do {
-			if(!(FineFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) eps.push_back(FindFileData.cFileName);
+			if(!(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) eps.push_back(FindFileData.cFileName);
 		} while(FindNextFile(hFind, &FindFileData));
 		FindClose(hFind);
 	}
@@ -854,7 +854,7 @@ int Calculator::loadDefinitions(const char* file_name, bool is_user_defs, bool c
 		xmlFreeDoc(doc);
 		return false;
 	}
-	int version_numbers[] = {5, 3, 0};
+	int version_numbers[] = {5, 5, 1};
 	parse_qalculate_version(version, version_numbers);
 
 	bool new_names = version_numbers[0] > 0 || version_numbers[1] > 9 || (version_numbers[1] == 9 && version_numbers[2] >= 4);
@@ -3229,6 +3229,7 @@ bool Calculator::importCSV(MathStructure &mstruct, const char *file_name, int fi
 						headers->push_back(str1);
 					}
 					mstruct.resizeMatrix(1, columns, m_undefined);
+					if(mstruct.rows() < 1 || mstruct.columns() < (size_t) columns) return false;
 				}
 			}
 			if((!headers || row > first_row) && !stmp.empty()) {
@@ -3321,6 +3322,7 @@ bool Calculator::importCSV(const char *file_name, int first_row, bool headers, s
 					}
 					if(to_matrix) {
 						mstruct.resizeMatrix(1, columns, m_undefined);
+						if(mstruct.rows() < 1 || mstruct.columns() < (size_t) columns) return false;
 					} else {
 						vectors.push_back(m_empty_vector);
 					}

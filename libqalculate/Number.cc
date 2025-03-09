@@ -168,6 +168,12 @@ void insert_thousands_separator(string &str, const PrintOptions &po) {
 		int do_thin_space = -1;
 		if(i_deci != string::npos) {
 			if(po.digit_grouping != DIGIT_GROUPING_LOCALE && i_deci + po.decimalpoint().length() < str.length() - 4 && str.find("…") == string::npos && str.find("...") == string::npos) {
+				size_t i_end = str.length();
+				if(po.indicate_infinite_series == REPEATING_DECIMALS_OVERLINE) {
+					i_end = str.find("¯");
+					if(i_end == string::npos) i_end = str.length();
+					else i_end++;
+				}
 				i = i_deci + 3 + po.decimalpoint().length();
 				if(do_thin_space == -1) {
 					if(po.use_unicode_signs && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (THIN_SPACE, po.can_display_unicode_string_arg))) do_thin_space = 1;
@@ -177,13 +183,15 @@ void insert_thousands_separator(string &str, const PrintOptions &po) {
 					if(do_thin_space != 0 && !IsWindows10OrGreater()) do_thin_space = 0;
 #endif
 				}
-				while(i < str.length()) {
+				while(i < i_end) {
 					if(do_thin_space) {
 						str.insert(i, nobreak ? NNBSP : THIN_SPACE);
 						i += 3 + strlen(nobreak ? NNBSP : THIN_SPACE);
+						i_end += strlen(nobreak ? NNBSP : THIN_SPACE);
 					} else {
 						str.insert(i, " ");
 						i += 4;
+						i_end += 1;
 					}
 				}
 			}
@@ -4027,7 +4035,7 @@ bool Number::raise(const Number &o, bool try_exact) {
 			size_t length1 = mpz_sizeinbase(mpq_numref(r_value), 10);
 			size_t length2 = mpz_sizeinbase(mpq_denref(r_value), 10);
 			if(length2 > length1) length1 = length2;
-			if((i_root <= 2 || mpq_sgn(r_value) > 0) && ((!try_exact && i_root <= 3 && (long long int) labs(i_pow) * length1 < 1000) || (try_exact && (long long int) labs(i_pow) * length1 < 1000000LL && i_root < 1000000L))) {
+			if((i_root <= 2 || mpq_sgn(r_value) > 0) && ((!try_exact && i_root <= 3 && i_pow < 1000 && i_pow > -1000 && length1 < 1000 && labs(i_pow) * length1 < 1000) || (try_exact && i_root < 1000000L && i_pow < 1000000L && i_pow > -1000000L && length1 < 1000000L && (long long int) labs(i_pow) * length1 < 1000000LL))) {
 				bool complex_result = false;
 				if(i_root != 1) {
 					mpq_t r_test;
@@ -10623,6 +10631,8 @@ void add_base_exponent(string &str, long int expo, int base, const PrintOptions 
 	}
 }
 
+#define PRECISION_DIGITS ((po.use_max_decimals && po.max_decimals < -1 && po.max_decimals < PRECISION) ? -po.max_decimals : PRECISION)
+
 string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) const {
 	if(CALCULATOR->aborted()) return CALCULATOR->abortedMessage();
 	// reset InternalPrintStruct (used for separate handling sign, scientific notation, numerator/denominator, imaginary/real parts, etc)
@@ -10856,7 +10866,7 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 
 		// if base is approximate, output is approximate
 		if(po.is_approximate && base.isApproximate()) *po.is_approximate = true;
-		long int precision = PRECISION;
+		long int precision = PRECISION_DIGITS;
 		// adjust output precision if precision of number or base is lower than global precision
 		if(b_approx && i_precision >= 0 && i_precision < precision) precision = i_precision;
 		if(base.isApproximate() && base.precision() >= 0 && base.precision() < precision) precision = base.precision();
@@ -11258,11 +11268,11 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 			// do not show zero seconds in time format
 			if(!nr3.isInterval() && (!nr3.isZero() || BASE_IS_SEXAGESIMAL(po.base))) {
 				if(nr1.isZero() && nr2.isZero()) {
-					po2.min_exp = PRECISION;
+					po2.min_exp = PRECISION_DIGITS;
 				} else {
 					po2.min_exp = EXP_NONE;
-					if(po2.max_decimals < 0 || !po2.max_decimals) {
-						po2.max_decimals = PRECISION;
+					if(po2.max_decimals < 0 || !po2.use_max_decimals) {
+						po2.max_decimals = PRECISION_DIGITS;
 						po2.use_max_decimals = true;
 					}
 				}
@@ -11281,7 +11291,7 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 			}
 		}
 
-		if((po.min_exp > 0 && po.min_exp < PRECISION) || (po.min_exp < 0 && (-po.min_exp) < PRECISION)) po2.min_exp = EXP_PRECISION;
+		if((po.min_exp > 0 && po.min_exp < PRECISION_DIGITS) || (po.min_exp < 0 && (-po.min_exp) < PRECISION_DIGITS)) po2.min_exp = EXP_PRECISION;
 		else po2.min_exp = po.min_exp;
 		InternalPrintStruct ips2;
 		string exp;
@@ -11308,11 +11318,11 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 		}
 		if(po.base == BASE_SEXAGESIMAL_2 || po.base == BASE_LATITUDE_2 || po.base == BASE_LONGITUDE_2) {
 			if(nr1.isZero()) {
-				po2.min_exp = PRECISION;
+				po2.min_exp = PRECISION_DIGITS;
 			} else {
 				po2.min_exp = EXP_NONE;
-				if(po2.max_decimals < 0 || !po2.max_decimals) {
-					po2.max_decimals = PRECISION;
+				if(po2.max_decimals < 0 || !po2.use_max_decimals) {
+					po2.max_decimals = PRECISION_DIGITS;
 					po2.use_max_decimals = true;
 				}
 			}
@@ -11453,10 +11463,10 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 		return str;
 	}
 
-	long int precision = PRECISION;
+	long int precision = PRECISION_DIGITS;
 
 	// adjust output precision if precision of the number is lower than global precision
-	if(b_approx && i_precision >= 0 && (po.preserve_precision || po.preserve_format || i_precision < PRECISION)) precision = i_precision;
+	if(b_approx && i_precision >= 0 && (po.preserve_precision || po.preserve_format || i_precision < precision)) precision = i_precision;
 	// if preserve_precision is true, use full precision
 	else if(b_approx && i_precision < 0 && po.preserve_precision && FROM_BIT_PRECISION(NUMBER_BIT_PRECISION) > precision) precision = FROM_BIT_PRECISION(NUMBER_BIT_PRECISION);
 	// if preserve_format is true, use full precision - 1 (avoids confusing output)
@@ -11625,8 +11635,9 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 				if(po.number_fraction_format >= FRACTION_FRACTIONAL) {
 					// restricted fraction format: exponent = length - 1 if exponent >= precision; increase precision if possible to avoid lengthening of the output
 					long int precexp = i_precision_base;
-					if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
-					else if(precexp > precision + 3) precexp = precision + 3;
+					int prec_add = precision < 8 ? 2 : 3;
+					if(po.use_max_decimals && po.max_decimals < -1) prec_add = 0;
+					if(precexp > precision + prec_add) precexp = precision + prec_add;
 					if(exact && ((expo >= 0 && length - 1 < precexp) || (expo < 0 && expo > -PRECISION))) expo = 0;
 					else expo = length - 1;
 				} else {
@@ -11645,9 +11656,10 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 			if(po.min_exp == EXP_PRECISION || (po.min_exp == EXP_NONE && (expo > 100000L || expo < -100000L))) {
 				// use scientific notation if exponent >= precision; increase precision if possible to avoid lengthening of the output
 				long int precexp = i_precision_base;
-				if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
-				else if(precexp > precision + 3) precexp = precision + 3;
-				if(exact && ((expo >= 0 && length - 1 < precexp) || (expo < 0 && expo > -PRECISION))) {
+				int prec_add = precision < 8 ? 2 : 3;
+				if(po.use_max_decimals && po.max_decimals < -1) prec_add = 0;
+				if(precexp > precision + prec_add) precexp = precision + prec_add;
+				if(exact && ((expo >= 0 && length - 1 < precexp) || (expo < 0 && expo > -PRECISION_DIGITS))) {
 					if(precision_base < length) precision_base = length;
 					expo = 0;
 				}
@@ -12012,9 +12024,10 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 				precision = precision_base;
 				if(base != 10 || po.min_exp == EXP_PRECISION || (po.min_exp == EXP_NONE && (expo > 100000L || expo < -100000L))) {
 					long int precexp = i_precision_base;
-					if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
-					else if(precexp > precision + 3) precexp = precision + 3;
-					if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION)) {
+					int prec_add = precision < 8 ? 2 : 3;
+					if(po.use_max_decimals && po.max_decimals < -1) prec_add = 0;
+					if(precexp > precision + prec_add) precexp = precision + prec_add;
+					if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION_DIGITS)) {
 						if(expo >= i_precision_base) i_precision_base = expo + 1;
 						if(expo >= precision_base) precision_base = expo + 1;
 						if(expo >= precision) precision = expo + 1;
@@ -12296,9 +12309,10 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 			expo = i_log;
 			if(po.min_exp == EXP_PRECISION || (po.min_exp == EXP_NONE && (expo > 100000L || expo < -100000L)) || (base != 10 && (expo > 10000L || expo < -10000L))) {
 				long int precexp = i_precision_base;
-				if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
-				else if(precexp > precision + 3) precexp = precision + 3;
-				if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION)) {
+				int prec_add = precision < 8 ? 2 : 3;
+				if(po.use_max_decimals && po.max_decimals < -1) prec_add = 0;
+				if(precexp > precision + prec_add) precexp = precision + prec_add;
+				if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION_DIGITS)) {
 					if(expo >= i_precision_base) i_precision_base = expo + 1;
 					if(expo >= precision_base) precision_base = expo + 1;
 					if(expo >= precision) precision = expo + 1;
@@ -12639,9 +12653,10 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 				expo = length - 1;
 				if(po.min_exp == EXP_PRECISION) {
 					long int precexp = i_precision_base;
-					if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
-					else if(precexp > precision + 3) precexp = precision + 3;
-					if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION)) {
+					int prec_add = precision < 8 ? 2 : 3;
+					if(po.use_max_decimals && po.max_decimals < -1) prec_add = 0;
+					if(precexp > precision + prec_add) precexp = precision + prec_add;
+					if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION_DIGITS)) {
 						if(expo >= precision) precision = expo + 1;
 						if(expo >= precision_base) precision_base = expo + 1;
 						if(expo >= precision2) precision2 = expo + 1;
@@ -12883,7 +12898,7 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 				long int precexp = i_precision_base;
 				if(precision < 8 && precexp > precision + 2) precexp = precision + 2;
 				else if(precexp > precision + 3) precexp = precision + 3;
-				if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION)) {
+				if((expo > 0 && expo < precexp) || (expo < 0 && expo > -PRECISION_DIGITS)) {
 					if(expo >= precision) precision = expo + 1;
 					if(expo >= precision2) precision2 = expo + 1;
 					expo = 0;
@@ -13015,20 +13030,25 @@ string Number::print(const PrintOptions &po, const InternalPrintStruct &ips) con
 		}
 		if(infinite_series) {
 			size_t i_dp = str.find(po.decimalpoint());
-			bool nobreak = str.length() <= 20;
-			if(i_dp != string::npos && ((infinite_series == 1 && i_dp + po.decimalpoint().length() + 2 < str.length() - infinite_series) || (infinite_series > 1 && i_dp + po.decimalpoint().length() < str.length() - infinite_series))) {
-				if(po.use_unicode_signs
+			if(po.indicate_infinite_series == REPEATING_DECIMALS_OVERLINE) {
+				str = str.substr(0, str.length() - infinite_series);
+				str.insert(str.length() - infinite_series, "¯");
+			} else {
+				bool nobreak = str.length() <= 20;
+				if(i_dp != string::npos && ((infinite_series == 1 && i_dp + po.decimalpoint().length() + 2 < str.length() - infinite_series) || (infinite_series > 1 && i_dp + po.decimalpoint().length() < str.length() - infinite_series))) {
+					if(po.use_unicode_signs
 #ifdef _WIN32
-				&& IsWindows10OrGreater()
+					&& IsWindows10OrGreater()
 #endif
-				&& (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (nobreak ? NNBSP : THIN_SPACE, po.can_display_unicode_string_arg))) {
-					str.insert(str.length() - (infinite_series == 1 ? 3 : infinite_series), nobreak ? NNBSP : THIN_SPACE);
-				} else {
-					str.insert(str.length() - (infinite_series == 1 ? 3 : infinite_series), " ");
+					&& (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) (nobreak ? NNBSP : THIN_SPACE, po.can_display_unicode_string_arg))) {
+						str.insert(str.length() - (infinite_series == 1 ? 3 : infinite_series), nobreak ? NNBSP : THIN_SPACE);
+					} else {
+						str.insert(str.length() - (infinite_series == 1 ? 3 : infinite_series), " ");
+					}
 				}
+				if(po.use_unicode_signs && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) ("…", po.can_display_unicode_string_arg))) str += "…";
+				else str += "...";
 			}
-			if(po.use_unicode_signs && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) ("…", po.can_display_unicode_string_arg))) str += "…";
-			else str += "...";
 		} else if(po.preserve_format && !exact) {
 			if(po.use_unicode_signs && (!po.can_display_unicode_string_function || (*po.can_display_unicode_string_function) ("…", po.can_display_unicode_string_arg))) str += "…";
 			else str += "...";

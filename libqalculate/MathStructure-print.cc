@@ -1989,12 +1989,6 @@ void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *paren
 			}
 			break;
 		}
-		case STRUCT_POWER: {
-			if(CHILD(0).isUnit()) {
-				CHILD(0).setPlural(false);
-				break;
-			}
-		}
 		case STRUCT_NEGATE: {
 			if(po.place_units_separately && (!parent || !parent->isAddition())) {
 				CHILD(0).postFormatUnits(po, this, 1);
@@ -2007,6 +2001,10 @@ void MathStructure::postFormatUnits(const PrintOptions &po, MathStructure *paren
 			}
 		}
 		default: {
+			if(m_type == STRUCT_POWER && CHILD(0).isUnit()) {
+				CHILD(0).setPlural(false);
+				break;
+			}
 			for(size_t i = 0; i < SIZE; i++) {
 				if(CALCULATOR->aborted()) break;
 				CHILD(i).postFormatUnits(po, this, i + 1);
@@ -2890,10 +2888,11 @@ void MathStructure::formatsub(const PrintOptions &po, MathStructure *parent, siz
 				if(!approximately_displayed) {
 					if(po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format != FRACTION_FRACTIONAL_FIXED_DENOMINATOR && po.number_fraction_format != FRACTION_COMBINED_FIXED_DENOMINATOR) den.print(po2, ips_n);
 					if(!approximately_displayed) {
-						if((po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) && !o_number.isFraction()) {
+						if((po.number_fraction_format == FRACTION_COMBINED || po.number_fraction_format == FRACTION_COMBINED_FIXED_DENOMINATOR) && (!o_number.isFraction() || num.isZero())) {
 							// mixed fraction format (e.g. 5/3=1+2/3)
 							Number nr_int(o_number);
-							nr_int.trunc();
+							if(num.isZero() && !nr_int.isInteger()) nr_int.round(get_rounding_mode(po));
+							else nr_int.trunc();
 							if(isApproximate()) nr_int.setApproximate();
 							if(po.base != BASE_ROMAN_NUMERALS && po.base != BASE_BIJECTIVE_26 && po.number_fraction_format != FRACTION_FRACTIONAL_FIXED_DENOMINATOR && po.number_fraction_format != FRACTION_COMBINED_FIXED_DENOMINATOR) nr_int.print(po2, ips_n);
 							if(!approximately_displayed) {
@@ -3748,6 +3747,24 @@ string MathStructure::print(const PrintOptions &po, bool format, int colorize, i
 						break;
 					} else if(print_str[i] == DOT_CH || print_str[i] == COMMA_CH) {
 						break;
+					}
+				}
+			}
+			if(format && po.indicate_infinite_series == REPEATING_DECIMALS_OVERLINE && o_number.isRational() && !o_number.isInteger() && po.base != BASE_CUSTOM && po.base != BASE_UNICODE) {
+				size_t i = print_str.find("¯");
+				if(i != string::npos) {
+					if(po.base == BASE_DECIMAL) {
+						size_t i2 = print_str.find_first_of("Ee", i);
+						if(i2 != string::npos) i_number_end = i2;
+					}
+					if(tagtype == TAG_TYPE_TERMINAL) {
+						print_str.insert(i_number_end, "\033[55m");
+						print_str.erase(i, strlen("¯"));
+						print_str.insert(i, "\033[53m");
+					} else if(tagtype == TAG_TYPE_HTML) {
+						print_str.insert(i_number_end, "</span>");
+						print_str.erase(i, strlen("¯"));
+						print_str.insert(i, "<span style=\"text-decoration: overline\">");
 					}
 				}
 			}
