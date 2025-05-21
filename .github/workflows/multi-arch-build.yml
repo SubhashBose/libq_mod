@@ -20,13 +20,12 @@ jobs:
     runs-on: ubuntu-24.04${{ matrix.runner }}
     strategy:
       matrix:
-        runner: ['', '-arm']
-        arch: [amd64, aarch64]
-        exclude:
+        # build targets
+        include:
           - runner: ''
-            arch: aarch64
-          - runner: '-arm'
             arch: amd64
+          - runner: '-arm'
+            arch: arm64
     steps:
       - uses: actions/checkout@v3
       - name: Compile
