@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.create_tag.outputs.tag }}
+    steps:
+      - name: Create tag
+        id: create_tag
+        run: |
+          tag=$(date +%Y-%m-%d_%H%M%S)
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+
+  build:
+    needs: create-tag
+    runs-on: ubuntu-24.04${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: ['', '-arm']
+        arch: [amd64, aarch64]
+        exclude:
+          - runner: ''
+            arch: aarch64
+          - runner: '-arm'
+            arch: amd64
+    steps:
+      - uses: actions/checkout@v3
+      - name: Compile
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y intltool libmpfr-dev libcurl4-openssl-dev doxygen libreadline-dev
+          ./autogen.sh --disable-shared --enable-static --enable-compiled-definitions
+          make
+      - name: Test
+        run: ./src/qalc '5.6h to h'
+      - name: Rename binary
+        run: mv src/qalc src/qalc-${{ matrix.arch }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: src/qalc-${{ matrix.arch }}
+          tag_name: ${{ needs.create-tag.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
