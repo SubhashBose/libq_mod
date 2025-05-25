@@ -437,6 +437,9 @@ bool QalculateDateTime::set(string str) {
 		} else if(stz == "PST") {
 			itz = -8 * 60;
 			b_tz = true;
+		} else if(stz == "IST") {
+			itz = 5 * 60 + 30;
+			b_tz = true;
 		} else if(stz.length() > 1 && (stz[0] == '-' || stz[0] == '+')) {
 			unsigned int tzh = 0, tzm = 0;
 			if(sscanf(stz.c_str() + sizeof(char), "%2u:%2u", &tzh, &tzm) > 0) {
