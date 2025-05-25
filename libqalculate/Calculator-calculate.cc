@@ -2597,6 +2597,9 @@ string Calculator::parseToExpression(string to_str, EvaluationOptions &evalops, 
 		} else if(to_str == "CET") {
 			printops.time_zone = TIME_ZONE_CUSTOM;
 			printops.custom_time_zone = 60;
+		} else if(to_str == "IST") {
+			printops.time_zone = TIME_ZONE_CUSTOM;
+			printops.custom_time_zone = 5 * 60 + 30;
 		} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "rectangular", _("rectangular")) || EQUALS_IGNORECASE_AND_LOCAL(to_str, "cartesian", _("cartesian")) || to_str == "rect") {
 			evalops.complex_number_form = COMPLEX_NUMBER_FORM_RECTANGULAR;
 		} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "exponential", _("exponential")) || to_str == "exp") {
