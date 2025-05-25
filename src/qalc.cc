@@ -5182,6 +5182,11 @@ int main(int argc, char *argv[]) {
 				printops.custom_time_zone = 60;
 				setResult(NULL, false);
 				printops.time_zone = TIME_ZONE_LOCAL;
+			} else if(str == "IST") {
+				printops.time_zone = TIME_ZONE_CUSTOM;
+				printops.custom_time_zone = 5 * 60 + 30;
+				setResult(NULL, false);
+				printops.time_zone = TIME_ZONE_LOCAL;
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(str, "rectangular", _("rectangular")) || EQUALS_IGNORECASE_AND_LOCAL(str, "cartesian", _("cartesian")) || str == "rect") {
 				avoid_recalculation = false;
 				ComplexNumberForm cnf_bak = evalops.complex_number_form;
