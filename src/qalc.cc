@@ -7887,6 +7887,9 @@ void execute_expression(bool do_mathoperation, MathOperation op, MathFunction *f
 				} else if(to_str == "CET") {
 					printops.time_zone = TIME_ZONE_CUSTOM;
 					printops.custom_time_zone = 60;
+				} else if(to_str == "IST") {
+					printops.time_zone = TIME_ZONE_CUSTOM;
+					printops.custom_time_zone = 5 * 60 + 30;
 				} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "factors", _("factors")) || to_str == "factor") {
 					do_factors = true;
 				}  else if(equalsIgnoreCase(to_str, "partial fraction") || equalsIgnoreCase(to_str, _("partial fraction")) || to_str == "partial") {
