@@ -296,6 +296,7 @@
         <_title>First data row</_title>
       </argument>
       <argument index="3">
+        <!-- Delimiter -->
         <_title>Separator</_title>
       </argument>
     </builtin_function>
@@ -529,29 +530,25 @@
     <function>
       <_title>Permutations (Variations)</_title>
       <_names>r:perm,variations</_names>
-      <expression>if(\y>\x,0,\x!/(\x-\y)!)</expression>
+      <expression>binomial(\x,\y)*gamma(\y+1)</expression>
       <_description>Returns the number of possible arrangements of an ordered list with a number of objects to choose from and a list size. If there are three objects (1, 2 and 3) that are put in a list with two positions, the alternatives are [1, 2], [2, 1], [1, 3], [3, 1], [2, 3] and [3, 2], and thus the number of permutations is 6.</_description>
-      <argument type="integer" index="1">
+      <argument type="number" index="1">
         <_title>Objects</_title>
-        <min>0</min>
       </argument>
-      <argument type="integer" index="2">
+      <argument type="number" index="2">
         <_title>Size</_title>
-        <min>0</min>
       </argument>
     </function>
     <function>
       <_title>Combinations</_title>
       <_names>r:comb</_names>
-      <expression>if(\y>\x,0,\x!/(\y!*(\x-\y)!))</expression>
+      <expression>binomial(\x,\y)</expression>
       <_description>Returns the number of possible arrangements of an unordered list with a number of objects to choose from and a list size. If there are three objects (1, 2 and 3) that are put in a list with place for two, the alternatives are [1, 2], [1, 3], and [2, 3], and thus the number of combinations is 3.</_description>
-      <argument type="integer" index="1">
+      <argument type="number" index="1">
         <_title>Objects</_title>
-        <min>0</min>
       </argument>
-      <argument type="integer" index="2">
+      <argument type="number" index="2">
         <_title>Size</_title>
-        <min>0</min>
       </argument>
     </function>
     <function>
@@ -1029,6 +1026,9 @@
         <argument index="3">
           <_title>Set of digits</_title>
         </argument>
+	<argument index="4">
+          <_title>Reverse conversion</_title>
+        </argument>
       </builtin_function>
       <builtin_function name="bin">
         <_title>Binary</_title>
@@ -1040,6 +1040,9 @@
         <argument index="2">
           <_title>Two's complement</_title>
         </argument>
+	<argument index="3">
+          <_title>Reverse conversion</_title>
+        </argument>
       </builtin_function>
       <builtin_function name="oct">
         <_title>Octal</_title>
@@ -1048,6 +1051,9 @@
         <argument index="1">
           <_title>Octal number</_title>
         </argument>
+	<argument index="2">
+          <_title>Reverse conversion</_title>
+        </argument>
       </builtin_function>
       <builtin_function name="dec">
         <_title>Decimal</_title>
@@ -1055,6 +1061,9 @@
         <_description>Returns a value from a decimal expression.</_description>
         <argument index="1">
           <_title>Decimal number</_title>
+        </argument>
+	<argument index="2">
+          <_title>Reverse conversion</_title>
         </argument>
       </builtin_function>
       <builtin_function name="hex">
@@ -1066,6 +1075,9 @@
         </argument>
         <argument index="2">
           <_title>Two's complement</_title>
+        </argument>
+	<argument index="3">
+          <_title>Reverse conversion</_title>
         </argument>
       </builtin_function>
       <builtin_function name="bijective">

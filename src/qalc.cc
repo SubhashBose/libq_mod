@@ -38,12 +38,10 @@
 #include <libqalculate/MathStructure-support.h>
 
 using std::string;
-using std::cout;
 using std::vector;
-using std::endl;
-using std::iterator;
-using std::cerr;
 using std::list;
+using std::cout;
+using std::endl;
 
 class ViewThread : public Thread {
 protected:
@@ -107,6 +105,7 @@ int dual_fraction = -1, saved_dual_fraction = -1;
 int dual_approximation = -1, saved_dual_approximation = -1;
 bool tc_set = false, sinc_set = false;
 bool ignore_locale = false;
+string custom_lang;
 bool result_only = false, vertical_space = true;
 bool do_imaginary_j = false;
 int sigint_action = 1;
@@ -610,7 +609,7 @@ void handle_exit() {
 
 #ifndef _WIN32
 void sigint_handler(int) {
-	if(CALCULATOR->busy()) {
+	if(b_busy || CALCULATOR->busy()) {
 		CALCULATOR->abort();
 		return;
 	}
@@ -1532,6 +1531,12 @@ void set_option(string str) {
 			}
 			PUTS_UNICODE("Please restart the program for the change to take effect.");
 		}
+	} else if(EQUALS_IGNORECASE_AND_LOCAL(svar, "language", _("language"))) {
+		if(svalue == "0" || svalue == "1" || EQUALS_IGNORECASE_AND_LOCAL(svar, "default", _("default"))) svalue = "";
+		if(svalue != custom_lang) {
+			custom_lang = svalue;
+			PUTS_UNICODE(_("Please restart the program for the change to take effect."));
+		}
 	} else if(EQUALS_IGNORECASE_AND_LOCAL(svar, "save mode", _("save mode"))) {
 		int v = s2b(svalue);
 		if(v < 0) {
@@ -1912,6 +1917,7 @@ void set_option(string str) {
 			ADD_OPTION_TO_LIST("currency conversion", "curconv")
 			ADD_OPTION_TO_LIST1("exact")
 			ADD_OPTION_TO_LIST1("ignore locale")
+			ADD_OPTION_TO_LIST1("language")
 			ADD_OPTION_TO_LIST1("save mode")
 			ADD_OPTION_TO_LIST1("clear history")
 			ADD_OPTION_TO_LIST1("save history")
@@ -2289,7 +2295,7 @@ bool show_set_help(string set_option = "") {
 	}
 	STR_AND_TABS_BOOL("limit implicit multiplication", "limimpl", "", evalops.parse_options.limit_implicit_multiplication);
 	STR_AND_TABS_4("parsing mode", "syntax", _("See 'help parsing mode'."), evalops.parse_options.parsing_mode, _("adaptive"), _("implicit first"), _("conventional"), _("chain"), _("rpn"));
-	STR_AND_TABS_2("read precision", "readprec", _("If activated, numbers are interpreted as approximate with precision equal to the number of significant digits (3.20 = 3.20+/-0.005)."), evalops.parse_options.read_precision, _("off"), _("always"), _("when decimals"))
+	STR_AND_TABS_2("read precision", "readprec", _("If activated, numbers are interpreted as approximations with precision equal to the number of significant digits (3.20 = 3.20+/-0.005)."), evalops.parse_options.read_precision, _("off"), _("always"), _("when decimals"))
 	STR_AND_TABS_BOOL("simplified percentage", "percent", _("Interpret addition/subtraction of percentage as percentage increase/decrease of the first term (100 + 10% = 110)."), simplified_percentage);
 	STR_AND_TABS_BOOL("two's input", "twosin", _("Enables two's complement representation for input of negative binary numbers. All binary numbers starting with 1 are negative, unless binary bits is set."), evalops.parse_options.twos_complement);
 
@@ -2298,7 +2304,7 @@ bool show_set_help(string set_option = "") {
 	STR_AND_TABS_BOOL("all prefixes", "allpref", _("Enables automatic use of hecto, deca, deci, and centi."), printops.use_all_prefixes);
 	if(SET_OPTION_MATCHES("autoconversion", "conv")) {
 		STR_AND_TABS_SET("autoconversion", "conv");
-		SET_DESCRIPTION(_("Controls automatic unit conversion of the result. 'optimalsi' always converts non-SI units, while 'optimal' only converts to more optimal unit expressions, with less units and exponents."));
+		SET_DESCRIPTION(_("Controls automatic unit conversion of the result. 'optimalsi' always converts non-SI units, while 'optimal' only converts to unit expressions with less units and exponents."));
 		str += "(0";
 		if(evalops.auto_post_conversion == POST_CONVERSION_NONE && evalops.mixed_units_conversion == MIXED_UNITS_CONVERSION_NONE) str += "*";
 		str += " = "; str += (_("none"));
@@ -2344,6 +2350,15 @@ bool show_set_help(string set_option = "") {
 #endif
 	STR_AND_TABS_YESNO("clear history", "", _("Do not save expression history on exit."), clear_history_on_exit);
 	STR_AND_TABS_YESNO("ignore locale", "", _("Ignore system language and use English (requires restart)."), ignore_locale);
+	if(SET_OPTION_MATCHES("language", "")) {
+		STR_AND_TABS_SET("language", "");
+		str = " ";
+		if(custom_lang.empty()) str += _("default");
+		else str += custom_lang;
+		str += "*";
+		CHECK_IF_SCREEN_FILLED_PUTS(str.c_str());
+		SET_OPTION_FOUND
+	}
 	STR_AND_TABS_BOOL("rpn", "", _("Activates the Reverse Polish Notation stack."), rpn_mode);
 	STR_AND_TABS_YESNO("save definitions", "", _("Save functions, units, and variables on exit."), save_defs_on_exit);
 	STR_AND_TABS_YESNO("save mode", "", _("Save settings on exit."), save_mode_on_exit);
@@ -2980,7 +2995,14 @@ void do_autocalc(bool force, const char *action_text) {
 				if(vertical_space) sout += "\n";
 				sout += "\033["; sout += i2s(autocalc_lines); sout += "A";
 				if(move_pos) {
-					sout += "\033["; sout += i2s(unicode_length(orig_str, rl_point) + 3); sout += "G";
+					// Check if user has show-mode-in-prompt set to "on", and
+					// adjust the offset from the left to accomodate the mode
+					// string.
+					int input_offset = 3;
+					if (strcmp("on", rl_variable_value("show-mode-in-prompt")) == 0) {
+						input_offset += 5; // The prompt looks like "(ins)"; 5 chars.
+					}
+					sout += "\033["; sout += i2s(unicode_length(orig_str, rl_point) + input_offset); sout += "G";
 				}
 				FPUTS_UNICODE(sout.c_str(), stdout);
 				fflush(stdout);
@@ -3033,31 +3055,33 @@ int key_insert(int, int) {
 		return 0;
 	}
 	bool use_text = true;
-	string str;
-	if(use_text) {
-		MathStructure m(vans[0]->get());
-		PrintOptions po = printops;
-		bool approx = false, use_par = m.size() > 1 && !m.isFunction() && !m.isVector();
-		po.is_approximate = &approx;
-		if(evalops.parse_options.base < 2 || evalops.parse_options.base > 32) po.base = 10;
-		else po.base = evalops.parse_options.base;
-		po.base_display = BASE_DISPLAY_NONE;
-		po.twos_complement = evalops.parse_options.twos_complement;
-		po.hexadecimal_twos_complement = evalops.parse_options.hexadecimal_twos_complement;
-		if(po.number_fraction_format == FRACTION_DECIMAL) po.number_fraction_format = FRACTION_DECIMAL_EXACT;
-		printops.allow_non_usable = false;
-		if(((po.base == 2 && po.twos_complement) || (po.base == 16 && po.hexadecimal_twos_complement)) && ((m.isNumber() && m.number().isNegative()) || (!m.isNumber() && m[0].number().isNegative()))) po.binary_bits = evalops.parse_options.binary_bits;
-		CALCULATOR->startControl(500);
-		m.format(po);
-		if(use_par) str += "(";
-		str += m.print(po);
-		if(use_par) str += ")";
-		if(CALCULATOR->aborted() || approx || m.isApproximate() || str.length() > 50 || evalops.parse_options.base < 2 || evalops.parse_options.base > 32) use_text = false;
-		if(CALCULATOR->aborted() || str.length() > 1000) str = "";
-		CALCULATOR->stopControl();
-		if(use_text) rl_insert_text(str.c_str());
+	MathStructure m(vans[0]->get());
+	PrintOptions po = printops;
+	bool approx = false, use_par = m.size() > 1 && !m.isFunction() && !m.isVector();
+	po.is_approximate = &approx;
+	if(evalops.parse_options.base < 2 || evalops.parse_options.base > 32) po.base = 10;
+	else po.base = evalops.parse_options.base;
+	po.base_display = BASE_DISPLAY_NONE;
+	po.twos_complement = evalops.parse_options.twos_complement;
+	po.hexadecimal_twos_complement = evalops.parse_options.hexadecimal_twos_complement;
+	if(po.number_fraction_format == FRACTION_DECIMAL) po.number_fraction_format = FRACTION_DECIMAL_EXACT;
+	printops.allow_non_usable = false;
+	if(((po.base == 2 && po.twos_complement) || (po.base == 16 && po.hexadecimal_twos_complement)) && ((m.isNumber() && m.number().isNegative()) || (!m.isNumber() && m[0].number().isNegative()))) po.binary_bits = evalops.parse_options.binary_bits;
+	CALCULATOR->startControl(500);
+	m.format(po);
+	string str = m.print(po);
+	if(!use_par) {
+		string str2 = str;
+		CALCULATOR->parseSigns(str2);
+		if(str2.find_first_of("*/") != string::npos) use_par = true;
 	}
+	if(use_par) str.insert(0, "(");
+	if(use_par) str += ")";
+	if(CALCULATOR->aborted() || approx || m.isApproximate() || str.length() > 50 || evalops.parse_options.base < 2 || evalops.parse_options.base > 32) use_text = false;
+	if(CALCULATOR->aborted() || str.length() > 1000) str = "";
+	CALCULATOR->stopControl();
 	if(use_text) {
+		rl_insert_text(str.c_str());
 		prev_ans_var = false;
 	} else {
 		string name = "ans";
@@ -3759,7 +3783,7 @@ int main(int argc, char *argv[]) {
 	string filename = buildPath(getLocalDir(), "qalc.cfg");
 	FILE *file = fopen(filename.c_str(), "r");
 	char line[10000];
-	string stmp;
+	string stmp, lang;
 	if(file) {
 		while(true) {
 			if(fgets(line, 10000, file) == NULL) break;
@@ -3768,11 +3792,42 @@ int main(int argc, char *argv[]) {
 				break;
 			} else if(strcmp(line, "ignore_locale=0\n") == 0) {
 				break;
+			} else if(strncmp(line, "language=", 9) == 0) {
+				lang = line + sizeof(char) * 9;
+				remove_blank_ends(lang);
+				if(!lang.empty()) {
+#	ifdef _WIN32
+					_putenv_s("LANGUAGE", lang.c_str());
+#	else
+					setenv("LANGUAGE", lang.c_str(), 1);
+#	endif
+				}
+				break;
 			}
 		}
 		fclose(file);
 	}
 	if(!ignore_locale) {
+#	ifdef _WIN32
+		if(lang.empty()) {
+			size_t n = 0;
+			getenv_s(&n, NULL, 0, "LANG");
+			if(n == 0) {
+				ULONG nlang = 0;
+				DWORD n = 0;
+				if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, NULL, &n)) {
+					WCHAR* wlocale = new WCHAR[n];
+					if(GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &nlang, wlocale, &n)) {
+						string lang = utf8_encode(wlocale);
+						gsub("-", "_", lang);
+						if(lang.length() > 5) lang = lang.substr(0, 5);
+						if(!lang.empty()) _putenv_s("LANGUAGE", lang.c_str());
+					}
+					delete[] wlocale;
+				}
+			}
+		}
+#	endif
 		bindtextdomain(GETTEXT_PACKAGE, getPackageLocaleDir().c_str());
 		bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 		textdomain(GETTEXT_PACKAGE);
@@ -4636,7 +4691,9 @@ int main(int argc, char *argv[]) {
 					gsub("z", "\\z", expr);
 				}
 				MathFunction *f = CALCULATOR->getActiveFunction(name, true);
-				if(f && f->isLocal() && f->subtype() == SUBTYPE_USER_FUNCTION && (!b_temp || f->category() == CALCULATOR->temporaryCategory())) {
+				if(CALCULATOR->hasToExpression(expr)) {
+					PUTS_UNICODE(_("Conversion (using \"to\") is not supported in functions."));
+				} else if(f && f->isLocal() && f->subtype() == SUBTYPE_USER_FUNCTION && (!b_temp || f->category() == CALCULATOR->temporaryCategory())) {
 					((UserFunction*) f)->setFormula(expr);
 					if(f->countNames() == 0) {
 						ExpressionName ename(name);
@@ -4955,7 +5012,9 @@ int main(int argc, char *argv[]) {
 				remove_blank_ends(str2);
 			}
 			remove_duplicate_blanks(str);
-			if(equalsIgnoreCase(str, "hex") || EQUALS_IGNORECASE_AND_LOCAL(str, "hexadecimal", _("hexadecimal"))) {
+			if(CALCULATOR->hasToExpression(str, false, evalops)) {
+				PUTS_UNICODE(_("Command does not allow multiple conversions at the same time."));
+			} else if(equalsIgnoreCase(str, "hex") || EQUALS_IGNORECASE_AND_LOCAL(str, "hexadecimal", _("hexadecimal"))) {
 				int save_base = printops.base;
 				printops.base = BASE_HEXADECIMAL;
 				setResult(NULL, false);
@@ -5257,6 +5316,7 @@ int main(int argc, char *argv[]) {
 				execute_command(COMMAND_EXPAND_PARTIAL_FRACTIONS);
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(str, "best", _("best")) || EQUALS_IGNORECASE_AND_LOCAL(str, "optimal", _("optimal"))) {
 				CALCULATOR->resetExchangeRatesUsed();
+				mstruct_exact.setUndefined();
 				MathStructure mstruct_new(CALCULATOR->convertToOptimalUnit(*mstruct, evalops, true));
 				if(check_exchange_rates()) mstruct->set(CALCULATOR->convertToOptimalUnit(*mstruct, evalops, true));
 				else mstruct->set(mstruct_new);
@@ -5275,6 +5335,7 @@ int main(int argc, char *argv[]) {
 			//base units
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(str, "base", _c("units", "base"))) {
 				CALCULATOR->resetExchangeRatesUsed();
+				mstruct_exact.setUndefined();
 				MathStructure mstruct_new(CALCULATOR->convertToBaseUnits(*mstruct, evalops));
 				if(check_exchange_rates()) mstruct->set(CALCULATOR->convertToBaseUnits(*mstruct, evalops));
 				else mstruct->set(mstruct_new);
@@ -5370,6 +5431,7 @@ int main(int argc, char *argv[]) {
 					CALCULATOR->resetExchangeRatesUsed();
 					MathStructure parsebak(*parsed_mstruct);
 					ParseOptions pa = evalops.parse_options; pa.base = 10;
+					mstruct_exact.setUndefined();
 					MathStructure mstruct_new(CALCULATOR->convert(*mstruct, CALCULATOR->unlocalizeExpression(str, pa), evalops, NULL, true, parsed_mstruct));
 					if(check_exchange_rates()) {
 						parsed_mstruct->set(parsebak);
@@ -5458,7 +5520,7 @@ int main(int argc, char *argv[]) {
 			PRINT_AND_COLON_TABS(_("angle unit"), "angle");
 			switch(evalops.parse_options.angle_unit) {
 				case ANGLE_UNIT_RADIANS: {str += _("rad"); break;}
-				case ANGLE_UNIT_DEGREES: {str += _("rad"); break;}
+				case ANGLE_UNIT_DEGREES: {str += _("deg"); break;}
 				case ANGLE_UNIT_GRADIANS: {str += _("gra"); break;}
 				case ANGLE_UNIT_CUSTOM: {if(CALCULATOR->customAngleUnit()) {str += CALCULATOR->customAngleUnit()->referenceName();} else {str += _("none");} break;}
 				default: {str += _("none"); break;}
@@ -5825,6 +5887,7 @@ int main(int argc, char *argv[]) {
 			PRINT_AND_COLON_TABS(_("clear history"), ""); str += b2yn(clear_history_on_exit, false);
 			CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("ignore locale"), ""); str += b2yn(ignore_locale, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
+			if(!custom_lang.empty()) {PRINT_AND_COLON_TABS(_("language"), ""); str += custom_lang; CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())}
 			PRINT_AND_COLON_TABS(_("rpn"), ""); str += b2oo(rpn_mode, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("save definitions"), ""); str += b2yn(save_defs_on_exit, false); CHECK_IF_SCREEN_FILLED_PUTS(str.c_str())
 			PRINT_AND_COLON_TABS(_("save mode"), ""); str += b2yn(save_mode_on_exit, false);
@@ -8637,6 +8700,8 @@ void load_preferences() {
 
 	ignore_locale = false;
 
+	custom_lang = "";
+
 	vertical_space = true;
 
 	adaptive_interval_display = true;
@@ -8730,6 +8795,8 @@ void load_preferences() {
 					save_defs_on_exit = v;
 				} else if(svar == "sigint_action") {
 					sigint_action = v;
+				} else if(svar == "language") {
+					custom_lang = svalue;
 				} else if(svar == "ignore_locale") {
 					ignore_locale = v;
 				} else if(svar == "colorize") {
@@ -9125,6 +9192,7 @@ bool save_preferences(bool mode) {
 #ifndef _WIN32
 	if(sigint_action != 1) fprintf(file, "sigint_action=%i\n", sigint_action);
 #endif
+	if(!custom_lang.empty()) fprintf(file, "language=%s\n", custom_lang.c_str());
 	fprintf(file, "ignore_locale=%i\n", ignore_locale);
 	fprintf(file, "colorize=%i\n", colorize);
 	fprintf(file, "auto_update_exchange_rates=%i\n", auto_update_exchange_rates);
