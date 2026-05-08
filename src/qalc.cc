@@ -103,6 +103,7 @@ bool canfetch = true;
 bool programmers_mode = false;
 int b_decimal_comma = -1;
 long int i_maxtime = 0;
+long int i_maxtimeREPL = 0;
 struct timeval t_end;
 int dual_fraction = -1, saved_dual_fraction = -1;
 int dual_approximation = -1, saved_dual_approximation = -1;
@@ -2999,6 +3000,7 @@ bool show_object_info(string name) {
 						dp = ds->getNextProperty(&it);
 					}
 				}
+				/*
 				if(f->subtype() == SUBTYPE_USER_FUNCTION) {
 					CHECK_IF_SCREEN_FILLED_PUTS("");
 					ParseOptions pa = evalops.parse_options; pa.base = 10;
@@ -3007,7 +3009,7 @@ bool show_object_info(string name) {
 						gsub(string("\\") + i2s(i2), ((UserFunction*) f)->getSubfunction(i2), str);
 					}
 					CHECK_IF_SCREEN_FILLED_PUTS(str.c_str());
-				}
+				}*/
 				CHECK_IF_SCREEN_FILLED_PUTS("");
 				break;
 			}
@@ -3036,6 +3038,7 @@ bool show_object_info(string name) {
 						break;
 					}
 					case SUBTYPE_ALIAS_UNIT: {
+						break; // SB mod
 						AliasUnit *au = (AliasUnit*) item;
 						PRINT_AND_COLON_TABS_INFO(_("Base Unit"));
 						string base_unit = au->firstBaseUnit()->print(printops, true, TAG_TYPE_TERMINAL, false, false);
@@ -4631,6 +4634,7 @@ int main(int argc, char *argv[]) {
 				i_maxtime += strtol(argv[i], NULL, 10);
 				if(i_maxtime < 0) i_maxtime = 0;
 			}
+			i_maxtimeREPL=i_maxtime;
 		} else if(!calc_arg_begun && (svar == "-set" || svar == "--set" || svar == "-s")) {
 			if(svalue.empty()) {
 				if(i + 1 < argc) {
@@ -4868,6 +4872,7 @@ int main(int argc, char *argv[]) {
 	if(!interactive_mode && (cfile || !calc_arg.empty())) {
 		CALCULATOR->forcePersistentPlot(true);
 	}
+	CALCULATOR->forcePersistentPlot(true);
 
 	if(!cfile && !calc_arg.empty()) {
 #ifdef HAVE_LIBREADLINE
@@ -5851,6 +5856,11 @@ int main(int argc, char *argv[]) {
 				printops.custom_time_zone = 60;
 				setResult(NULL, false);
 				printops.time_zone = TIME_ZONE_LOCAL;
+			} else if(str == "IST") {
+				printops.time_zone = TIME_ZONE_CUSTOM;
+				printops.custom_time_zone = 5 * 60 + 30;
+				setResult(NULL, false);
+				printops.time_zone = TIME_ZONE_LOCAL;
 			} else if(EQUALS_IGNORECASE_AND_LOCAL(str, "rectangular", _("rectangular")) || EQUALS_IGNORECASE_AND_LOCAL(str, "cartesian", _("cartesian")) || str == "rect") {
 				avoid_recalculation = false;
 				ComplexNumberForm cnf_bak = evalops.complex_number_form;
@@ -6649,12 +6659,12 @@ int main(int argc, char *argv[]) {
 			CHECK_IF_SCREEN_FILLED_PUTS(_("Type help COMMAND for more information (example: help save)."));
 			CHECK_IF_SCREEN_FILLED_PUTS(_("Type info NAME for information about a function, variable, unit, or prefix (example: info sin)."));
 			CHECK_IF_SCREEN_FILLED_PUTS(_("When a line begins with '/', the following text is always interpreted as a command."));
-			CHECK_IF_SCREEN_FILLED_PUTS("");
+/*			CHECK_IF_SCREEN_FILLED_PUTS("");
 #ifdef _WIN32
 			CHECK_IF_SCREEN_FILLED_PUTS(_("For more information about mathematical expression and different options, and a complete list of functions, variables, and units, see the relevant sections in the manual of the graphical user interface (available at https://qalculate.github.io/manual/index.html)."));
 #else
 			CHECK_IF_SCREEN_FILLED_PUTS(_("For more information about mathematical expression and different options, please consult the man page, or the relevant sections in the manual of the graphical user interface (available at https://qalculate.github.io/manual/index.html), which also includes a complete list of functions, variables, and units."));
-#endif
+#endif*/
 			puts("");
 		//qalc command
 		} else if(EQUALS_IGNORECASE_AND_LOCAL(str, "list", _("list"))) {
@@ -7607,6 +7617,14 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 						has_printed = false;
 					}
 				} else {
+					if (i_maxtimeREPL != 0 && (long int) i * 200 > i_maxtimeREPL) {
+						on_abort_display();
+						has_printed = false;
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(i % 10 == 0 && !result_only) {
 						printf(".");
 						fflush(stdout);
@@ -8082,6 +8100,13 @@ void execute_command(int command_type, bool show_result, bool auto_calculate) {
 						on_abort_command();
 					}
 				} else {
+					if (i_maxtimeREPL != 0 && (long int) i * 200 > i_maxtimeREPL) {
+						on_abort_command();
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(i % 10 == 0 && !result_only) {
 						printf(".");
 						fflush(stdout);
@@ -8929,6 +8954,9 @@ void execute_expression(bool do_mathoperation, MathOperation op, MathFunction *f
 				} else if(to_str == "CET") {
 					printops.time_zone = TIME_ZONE_CUSTOM;
 					printops.custom_time_zone = 60;
+				} else if(to_str == "IST") {
+					printops.time_zone = TIME_ZONE_CUSTOM;
+					printops.custom_time_zone = 5 * 60 + 30;
 				} else if(EQUALS_IGNORECASE_AND_LOCAL(to_str, "factors", _("factors")) || to_str == "factor") {
 					do_factors = true;
 					do_pfe = false;
@@ -9401,6 +9429,15 @@ void execute_expression(bool do_mathoperation, MathOperation op, MathFunction *f
 						has_printed = 0;
 					}
 				} else {
+					if (i_maxtimeREPL != 0 && (long int) i * 200 > i_maxtimeREPL) {
+						CALCULATOR->abort();
+						avoid_recalculation = true;
+						has_printed = 0;
+						printf(" time exceeded");
+					}
+#ifndef _WIN32
+					i++;
+#endif
 					if(i % 10 == 0 && !result_only) {
 						has_printed++;
 						printf(".");
