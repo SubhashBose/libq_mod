@@ -31,7 +31,7 @@ jobs:
       - name: Compile
         run: |
           sudo apt-get update
-          sudo apt-get install -y intltool libmpfr-dev libcurl4-openssl-dev doxygen libreadline-dev
+          sudo apt-get install -y intltool libmpfr-dev libcurl4-openssl-dev doxygen libreadline-dev gettext
           ./autogen.sh --disable-shared --enable-static --enable-compiled-definitions
           make
       - name: Test
