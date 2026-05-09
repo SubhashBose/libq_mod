@@ -7617,14 +7617,11 @@ void setResult(Prefix *prefix, bool update_parse, bool goto_input, size_t stack_
 						has_printed = false;
 					}
 				} else {
-					if (i_maxtimeREPL != 0 && (long int) i * 15 > i_maxtimeREPL) {
+					if (i_maxtimeREPL !=0 && (long int) i*20>i_maxtimeREPL){
 						on_abort_display();
 						has_printed = false;
 						printf(" time exceeded");
 					}
-#ifndef _WIN32
-					i++;
-#endif
 					if(i % 10 == 0 && !result_only) {
 						printf(".");
 						fflush(stdout);
@@ -8100,13 +8097,10 @@ void execute_command(int command_type, bool show_result, bool auto_calculate) {
 						on_abort_command();
 					}
 				} else {
-					if (i_maxtimeREPL != 0 && (long int) i * 15 > i_maxtimeREPL) {
+					if(i_maxtimeREPL !=0 && (long int) i*20>i_maxtimeREPL) {
 						on_abort_command();
 						printf(" time exceeded");
 					}
-#ifndef _WIN32
-					i++;
-#endif
 					if(i % 10 == 0 && !result_only) {
 						printf(".");
 						fflush(stdout);
@@ -9429,15 +9423,12 @@ void execute_expression(bool do_mathoperation, MathOperation op, MathFunction *f
 						has_printed = 0;
 					}
 				} else {
-					if (i_maxtimeREPL != 0 && (long int) i * 15 > i_maxtimeREPL) {
+					if(i_maxtimeREPL !=0 && (long int) i*20>i_maxtimeREPL) {
 						CALCULATOR->abort();
 						avoid_recalculation = true;
 						has_printed = 0;
 						printf(" time exceeded");
 					}
-#ifndef _WIN32
-					i++;
-#endif
 					if(i % 10 == 0 && !result_only) {
 						has_printed++;
 						printf(".");
